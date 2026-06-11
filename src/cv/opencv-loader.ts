@@ -224,20 +224,20 @@ export function loadOpenCV(): Promise<CVInstance> {
     if (typeof window === 'undefined') {
       throw new Error('OpenCV requires a browser environment')
     }
-    // Already loaded?
     if (typeof window.cv !== 'undefined' && window.cv?.Mat) {
       return window.cv
     }
 
     window.Module = {
-      onRuntimeInitialized() {
-        // cv is now available
-      },
+      onRuntimeInitialized() {},
     }
 
     await fetchWithCache(OPENCV_CDN)
     return window.cv
   })()
+
+  // Clear cached promise on failure so the next call retries
+  loadPromise.catch(() => { loadPromise = null })
 
   return loadPromise
 }

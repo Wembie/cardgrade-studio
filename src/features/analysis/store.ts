@@ -158,4 +158,4 @@ export const selectAnalysisComplete = (s: AnalysisState): boolean =>
   s.phase === 'complete'
 
 export const selectIsProcessing = (s: AnalysisState): boolean =>
-  ['uploading', 'detecting', 'centering', 'surface', 'edges', 'grading'].includes(s.phase)
+  ['uploading', 'loading_cv', 'detecting', 'centering', 'surface', 'edges', 'grading'].includes(s.phase)
