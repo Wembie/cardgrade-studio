@@ -54,7 +54,7 @@ const FEATURES = [
   {
     icon: Shield,
     title: 'Offline-First PWA',
-    desc: 'Install as a native app. Works completely offline. IndexedDB persistence. No cloud, no accounts.',
+    desc: 'Install as a native app. Works completely offline. No cloud, no accounts, no tracking — ever.',
     color: 'text-rose-400',
     bg: 'bg-rose-500/10',
     border: 'border-rose-500/20',

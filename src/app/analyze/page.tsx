@@ -4,11 +4,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ScanLine, Crosshair, Activity, Layers, Star,
-  ChevronLeft, ChevronRight, RotateCcw,
-  Download, X, AlertCircle, CheckCircle2,
+  ChevronLeft, RotateCcw,
+  Download, X, AlertCircle, AlertTriangle, CheckCircle2,
   Loader2
 } from 'lucide-react'
-import { cn, formatDate, generateId, fileToDataUrl, getImageDimensions } from '@/shared/lib/utils'
+import { cn, generateId, fileToDataUrl, getImageDimensions } from '@/shared/lib/utils'
 import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
@@ -16,7 +16,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components/ui
 import { Progress } from '@/shared/components/ui/progress'
 import { Separator } from '@/shared/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/shared/components/ui/tooltip'
-import Sidebar from '@/shared/components/layout/Sidebar'
+import AppHeader from '@/shared/components/layout/AppHeader'
 import { estimateAllGrades } from '@/features/grading-engine/engine'
 import UploadZone from '@/features/upload/components/UploadZone'
 import CenteringTool from '@/features/centering/components/CenteringTool'
@@ -25,6 +25,7 @@ import EdgeAnalyzer from '@/features/edge-analysis/components/EdgeAnalyzer'
 import GradeDisplay from '@/features/grading-engine/components/GradeDisplay'
 import { useAnalysisStore, selectIsProcessing, selectBestGrade } from '@/features/analysis/store'
 import { useAnalysisPipeline } from '@/features/analysis/hooks/useAnalysisPipeline'
+import { generatePDFReport } from '@/features/export/generateReport'
 import type { CardImage, ScanQuality, CenteringMeasurement } from '@/shared/types'
 
 const PHASE_LABELS: Record<string, string> = {
@@ -43,14 +44,11 @@ export default function AnalyzePage() {
   const store = useAnalysisStore()
   const { runAnalysis, reset } = useAnalysisPipeline()
   const isProcessing = useAnalysisStore(selectIsProcessing)
-  const bestGrade = useAnalysisStore(selectBestGrade)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false)
 
   const activeDataUrl =
     (store.correctedDataUrl ?? (store.showFront ? store.frontImage?.dataUrl : store.backImage?.dataUrl)) ?? null
 
-  // Handle image upload
   const handleUpload = useCallback(async (dataUrl: string, file: File, side: 'front' | 'back') => {
     const dims = await getImageDimensions(dataUrl)
     const img: CardImage = {
@@ -66,18 +64,14 @@ export default function AnalyzePage() {
     if (side === 'front') {
       store.setFrontImage(img)
       store.setShowFront(true)
+      store.setPhase('uploading', 2)
+      await runAnalysis(dataUrl)
     } else {
       store.setBackImage(img)
     }
-
-    // Auto-run analysis on front upload
-    if (side === 'front') {
-      store.setPhase('uploading', 2)
-      await runAnalysis(dataUrl)
-    }
   }, [store, runAnalysis])
 
-  // Handle paste
+  // Paste handler
   useEffect(() => {
     const handler = async (e: ClipboardEvent) => {
       const items = e.clipboardData?.items
@@ -96,7 +90,6 @@ export default function AnalyzePage() {
     return () => document.removeEventListener('paste', handler)
   }, [handleUpload])
 
-  // Active image dimensions
   const activeImage = store.showFront ? store.frontImage : store.backImage
   const imgW = activeImage?.width ?? 600
   const imgH = activeImage?.height ?? 880
@@ -105,31 +98,33 @@ export default function AnalyzePage() {
   const hasBack = !!store.backImage
   const hasResults = store.phase === 'complete'
 
+  const handleExport = useCallback(() => {
+    generatePDFReport({
+      grades: store.grades,
+      centering: store.centering,
+      surface: store.surface,
+      edges: store.edges,
+      quality: store.quality,
+      hasBack,
+    })
+  }, [store.grades, store.centering, store.surface, store.edges, store.quality, hasBack])
+
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
-        {/* Sidebar */}
-        <Sidebar collapsed={sidebarCollapsed} />
-
-        {/* Left Panel toggle */}
-        <button
-          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-4 h-8 bg-card border border-border rounded-r-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-          style={{ left: sidebarCollapsed ? 56 : 224 }}
-        >
-          {sidebarCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronLeft className="w-3 h-3" />}
-        </button>
+      <div className="flex flex-col h-screen overflow-hidden bg-background">
+        {/* Top header */}
+        <AppHeader />
 
         {/* Main workspace */}
         <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Top toolbar */}
+          {/* Toolbar */}
           <div className="flex items-center gap-3 px-4 h-12 border-b border-border bg-card/50 flex-shrink-0">
             {/* Tool selector */}
             <div className="flex items-center gap-0.5 bg-secondary rounded-lg p-0.5">
               {([
                 { tool: 'centering', icon: Crosshair, label: 'Centering' },
-                { tool: 'surface', icon: Activity, label: 'Surface' },
-                { tool: 'edges', icon: Layers, label: 'Edges' },
+                { tool: 'surface',   icon: Activity,  label: 'Surface'   },
+                { tool: 'edges',     icon: Layers,    label: 'Edges'     },
               ] as const).map(({ tool, icon: Icon, label }) => (
                 <Tooltip key={tool}>
                   <TooltipTrigger asChild>
@@ -179,16 +174,12 @@ export default function AnalyzePage() {
               </div>
             )}
 
-            {/* Progress bar */}
+            {/* Progress */}
             {isProcessing && (
               <div className="flex items-center gap-2 ml-3">
                 <Loader2 className="w-3.5 h-3.5 text-primary animate-spin" />
-                <span className="text-xs text-muted-foreground">
-                  {PHASE_LABELS[store.phase]}
-                </span>
-                <div className="w-24">
-                  <Progress value={store.progress} />
-                </div>
+                <span className="text-xs text-muted-foreground">{PHASE_LABELS[store.phase]}</span>
+                <div className="w-24"><Progress value={store.progress} /></div>
               </div>
             )}
 
@@ -208,18 +199,13 @@ export default function AnalyzePage() {
 
             <div className="ml-auto flex items-center gap-2">
               {hasFront && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={reset}
-                  className="h-7 text-xs gap-1.5"
-                >
+                <Button size="sm" variant="outline" onClick={reset} className="h-7 text-xs gap-1.5">
                   <RotateCcw className="w-3 h-3" />
                   Reset
                 </Button>
               )}
               {hasResults && (
-                <Button size="sm" className="h-7 text-xs gap-1.5">
+                <Button size="sm" onClick={handleExport} className="h-7 text-xs gap-1.5">
                   <Download className="w-3 h-3" />
                   Export PDF
                 </Button>
@@ -261,11 +247,7 @@ export default function AnalyzePage() {
                           ) : (
                             <LoadingPlaceholder label="Loading centering tool…" />
                           )}
-
-                          {/* Centering stats below tool */}
-                          {store.centering && (
-                            <CenteringStats centering={store.centering} />
-                          )}
+                          {store.centering && <CenteringStats centering={store.centering} />}
                         </motion.div>
                       )}
 
@@ -331,10 +313,14 @@ export default function AnalyzePage() {
                   className="flex-shrink-0 border-l border-border bg-card overflow-hidden"
                 >
                   <div className="w-[300px] h-full flex flex-col">
-                    {/* Panel header */}
                     <div className="flex items-center gap-2 px-4 h-12 border-b border-border flex-shrink-0">
                       <Star className="w-4 h-4 text-primary" />
                       <span className="text-sm font-medium">Grade Estimates</span>
+                      {hasResults && !hasBack && (
+                        <Badge variant="outline" className="ml-1 text-[10px] border-amber-500/40 text-amber-400 px-1.5 py-0 h-4">
+                          Estimated
+                        </Badge>
+                      )}
                       <button
                         onClick={() => setRightPanelCollapsed(true)}
                         className="ml-auto p-1 hover:bg-secondary rounded text-muted-foreground hover:text-foreground"
@@ -345,10 +331,16 @@ export default function AnalyzePage() {
 
                     <ScrollArea className="flex-1">
                       <div className="p-4 space-y-4">
-                        {/* Scan quality */}
-                        {store.quality && (
-                          <QualityBadge quality={store.quality} />
+                        {/* Estimated grade notice */}
+                        {hasResults && !hasBack && (
+                          <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-400">
+                            <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+                            <span>Estimated — front side only. Upload back for a complete grade.</span>
+                          </div>
                         )}
+
+                        {/* Scan quality */}
+                        {store.quality && <QualityBadge quality={store.quality} />}
 
                         {/* Grade cards */}
                         {store.grades.length > 0 ? (
@@ -376,7 +368,7 @@ export default function AnalyzePage() {
                             <Separator />
                             <div>
                               <div className="text-xs text-muted-foreground mb-2">
-                                Add back side (optional)
+                                Add back side <span className="text-muted-foreground/50">(optional — improves accuracy)</span>
                               </div>
                               <UploadZone
                                 side="back"
@@ -384,6 +376,21 @@ export default function AnalyzePage() {
                                 onUpload={(dataUrl, file) => handleUpload(dataUrl, file, 'back')}
                               />
                             </div>
+                          </>
+                        )}
+
+                        {/* Export button in panel */}
+                        {hasResults && (
+                          <>
+                            <Separator />
+                            <Button
+                              onClick={handleExport}
+                              variant="outline"
+                              className="w-full gap-2 text-xs h-8"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              Download Grading Report
+                            </Button>
                           </>
                         )}
                       </div>
@@ -397,12 +404,12 @@ export default function AnalyzePage() {
             {rightPanelCollapsed && (
               <button
                 onClick={() => setRightPanelCollapsed(false)}
-                className="flex-shrink-0 w-8 border-l border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors group"
+                className="flex-shrink-0 w-8 border-l border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
                 title="Show grade panel"
               >
                 <div className="flex flex-col items-center gap-1">
                   <ChevronLeft className="w-3.5 h-3.5" />
-                  <span className="text-xs [writing-mode:vertical-lr] rotate-180 text-xs">Grades</span>
+                  <span className="text-xs [writing-mode:vertical-lr] rotate-180">Grades</span>
                 </div>
               </button>
             )}

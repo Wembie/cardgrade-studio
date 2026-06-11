@@ -1,7 +1,6 @@
 import { create } from 'zustand'
 import { immer } from 'zustand/middleware/immer'
 import type {
-  CardScan,
   CardImage,
   CenteringMeasurement,
   SurfaceAnalysis,
@@ -25,8 +24,6 @@ export type AnalysisPhase =
   | 'error'
 
 interface AnalysisState {
-  // Current scan
-  currentScan: CardScan | null
   frontImage: CardImage | null
   backImage: CardImage | null
   correctedDataUrl: string | null
@@ -56,7 +53,6 @@ interface AnalysisState {
   panY: number
 
   // Actions
-  setCurrentScan: (scan: CardScan | null) => void
   setFrontImage: (img: CardImage | null) => void
   setBackImage: (img: CardImage | null) => void
   setCorrectedDataUrl: (url: string | null) => void
@@ -82,7 +78,6 @@ const defaultOverlays: OverlayType[] = ['centering', 'measurements']
 
 export const useAnalysisStore = create<AnalysisState>()(
   immer((set) => ({
-    currentScan: null,
     frontImage: null,
     backImage: null,
     correctedDataUrl: null,
@@ -103,7 +98,6 @@ export const useAnalysisStore = create<AnalysisState>()(
     panX: 0,
     panY: 0,
 
-    setCurrentScan: (scan) => set((s) => { s.currentScan = scan }),
     setFrontImage: (img) => set((s) => { s.frontImage = img }),
     setBackImage: (img) => set((s) => { s.backImage = img }),
     setCorrectedDataUrl: (url) => set((s) => { s.correctedDataUrl = url }),
@@ -130,7 +124,6 @@ export const useAnalysisStore = create<AnalysisState>()(
     setShowFront: (v) => set((s) => { s.showFront = v }),
     setPan: (x, y) => set((s) => { s.panX = x; s.panY = y }),
     reset: () => set((s) => {
-      s.currentScan = null
       s.frontImage = null
       s.backImage = null
       s.correctedDataUrl = null
