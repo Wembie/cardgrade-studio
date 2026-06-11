@@ -220,6 +220,8 @@ export default function AnalyzePage() {
             <div className="flex-1 overflow-hidden">
               {!hasFront ? (
                 <EmptyState onUpload={(dataUrl, file) => handleUpload(dataUrl, file, 'front')} />
+              ) : store.phase === 'loading_cv' ? (
+                <CVLoadingScreen />
               ) : (
                 <ScrollArea className="h-full">
                   <div className="p-4 min-h-full">
@@ -422,6 +424,30 @@ export default function AnalyzePage() {
 }
 
 // ── Sub-components ────────────────────────────────────────────────────────────
+
+function CVLoadingScreen() {
+  const [dots, setDots] = React.useState('.')
+  React.useEffect(() => {
+    const t = setInterval(() => setDots((d) => d.length >= 3 ? '.' : d + '.'), 600)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center space-y-6 max-w-sm px-6">
+        <div className="w-16 h-16 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+        <div>
+          <h3 className="text-lg font-bold mb-2">Loading CV Engine{dots}</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Compiling OpenCV WebAssembly (~10 MB). This only happens once — subsequent analyses are instant.
+          </p>
+        </div>
+        <div className="text-xs text-muted-foreground/50">Usually takes 15–30 seconds</div>
+      </div>
+    </div>
+  )
+}
 
 function EmptyState({ onUpload }: { onUpload: (dataUrl: string, file: File) => void }) {
   return (
