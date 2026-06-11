@@ -15,6 +15,7 @@ import type {
 export type AnalysisPhase =
   | 'idle'
   | 'uploading'
+  | 'loading_cv'
   | 'detecting'
   | 'centering'
   | 'surface'

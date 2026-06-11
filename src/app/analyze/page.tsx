@@ -31,6 +31,7 @@ import type { CardImage, ScanQuality, CenteringMeasurement } from '@/shared/type
 const PHASE_LABELS: Record<string, string> = {
   idle: '',
   uploading: 'Loading image…',
+  loading_cv: 'Loading CV engine… (first run ~15s)',
   detecting: 'Detecting card…',
   centering: 'Analyzing centering…',
   surface: 'Scanning surface…',

@@ -2,6 +2,7 @@
 
 import { useCallback } from 'react'
 import { useAnalysisStore } from '../store'
+import { loadOpenCV } from '@/cv/opencv-loader'
 import { checkScanQuality } from '@/cv/quality-checker'
 import { detectCard } from '@/cv/card-detector'
 import { analyzeCentering } from '@/cv/centering-analyzer'
@@ -15,9 +16,12 @@ export function useAnalysisPipeline() {
 
   const runAnalysis = useCallback(async (dataUrl: string) => {
     store.setError(null)
-    store.setPhase('detecting', 5)
+    store.setPhase('loading_cv', 2)
 
     try {
+      // 0. Pre-warm OpenCV WASM (first call compiles ~8 MB; subsequent calls instant)
+      await loadOpenCV()
+
       // 1. Load image pixels
       const imageData = await dataUrlToImageData(dataUrl)
 

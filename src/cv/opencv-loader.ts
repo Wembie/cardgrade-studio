@@ -209,11 +209,11 @@ function injectScript(src: string): Promise<void> {
         resolve()
       }
     }, 50)
-    // Timeout after 30s
+    // Timeout after 60s (WASM compile is CPU-bound on first load)
     setTimeout(() => {
       clearInterval(poll)
       reject(new Error('OpenCV.js init timeout'))
-    }, 30_000)
+    }, 60_000)
   })
 }
 
