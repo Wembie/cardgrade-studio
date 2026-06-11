@@ -164,40 +164,53 @@ export interface CVRotatedRect {
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 
-const OPENCV_CDN = '/opencv.js'
-const CACHE_NAME = 'cardgrade-cv-v1'
+const OPENCV_URL = '/opencv.js'
 
 let loadPromise: Promise<CVInstance> | null = null
 
-async function fetchWithCache(url: string): Promise<void> {
-  // Inject by URL directly — browser + service worker handle caching.
-  // Blob-URL approach breaks relative WASM resolution inside opencv.js.
-  await injectScript(url)
+function isWorkerContext(): boolean {
+  return typeof WorkerGlobalScope !== 'undefined' &&
+    typeof self !== 'undefined' &&
+    self instanceof WorkerGlobalScope
 }
 
-function injectScript(src: string): Promise<void> {
+function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
+  const g = globalThis as unknown as Record<string, CVInstance>
+  if (g['cv']?.Mat) { resolve(); return }
+  const poll = setInterval(() => {
+    if (g['cv']?.Mat) { clearInterval(poll); clearTimeout(timeout); resolve() }
+  }, 50)
+  const timeout = setTimeout(() => {
+    clearInterval(poll)
+    reject(new Error('OpenCV.js init timeout'))
+  }, 90_000)
+}
+
+function loadInWorker(url: string): Promise<void> {
+  return new Promise(async (resolve, reject) => {
+    try {
+      // new Function executes with globalThis as `this` → root.cv = factory() sets globalThis.cv
+      const response = await fetch(url)
+      const code = await response.text()
+      new Function(code).call(globalThis)
+      pollForCV(resolve, reject)
+    } catch (err) {
+      reject(err instanceof Error ? err : new Error(String(err)))
+    }
+  })
+}
+
+function loadInMainThread(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[data-opencv]`)
-    if (existing) { resolve(); return }
+    const existing = document.querySelector('script[data-opencv]')
+    if (existing) { pollForCV(resolve, reject); return }
     const script = document.createElement('script')
     script.setAttribute('data-opencv', '1')
     script.async = true
-    script.src = src
+    script.src = url
     script.onerror = () => reject(new Error('Failed to load OpenCV.js'))
     document.head.appendChild(script)
-    // OpenCV signals readiness via Module.onRuntimeInitialized
-    // We poll since the script sets window.cv directly after WASM init
-    const poll = setInterval(() => {
-      if (typeof window.cv !== 'undefined' && window.cv.Mat) {
-        clearInterval(poll)
-        resolve()
-      }
-    }, 50)
-    // Timeout after 60s (WASM compile is CPU-bound on first load)
-    setTimeout(() => {
-      clearInterval(poll)
-      reject(new Error('OpenCV.js init timeout'))
-    }, 60_000)
+    pollForCV(resolve, reject)
   })
 }
 
@@ -205,27 +218,25 @@ export function loadOpenCV(): Promise<CVInstance> {
   if (loadPromise) return loadPromise
 
   loadPromise = (async () => {
-    if (typeof window === 'undefined') {
-      throw new Error('OpenCV requires a browser environment')
-    }
-    if (typeof window.cv !== 'undefined' && window.cv?.Mat) {
-      return window.cv
+    const g = globalThis as unknown as Record<string, CVInstance>
+    if (g['cv']?.Mat) return g['cv']
+
+    ;(globalThis as Record<string, unknown>)['Module'] = { onRuntimeInitialized() {} }
+
+    if (isWorkerContext()) {
+      await loadInWorker(OPENCV_URL)
+    } else {
+      await loadInMainThread(OPENCV_URL)
     }
 
-    window.Module = {
-      onRuntimeInitialized() {},
-    }
-
-    await fetchWithCache(OPENCV_CDN)
-    return window.cv
+    return g['cv']
   })()
 
-  // Clear cached promise on failure so the next call retries
   loadPromise.catch(() => { loadPromise = null })
-
   return loadPromise
 }
 
 export function isOpenCVReady(): boolean {
-  return typeof window !== 'undefined' && typeof window.cv !== 'undefined' && !!window.cv?.Mat
+  const g = globalThis as unknown as Record<string, CVInstance>
+  return !!g['cv']?.Mat
 }
