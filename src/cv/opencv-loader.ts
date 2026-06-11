@@ -170,25 +170,9 @@ const CACHE_NAME = 'cardgrade-cv-v1'
 let loadPromise: Promise<CVInstance> | null = null
 
 async function fetchWithCache(url: string): Promise<void> {
-  if ('caches' in window) {
-    const cache = await caches.open(CACHE_NAME)
-    const cached = await cache.match(url)
-    if (cached) {
-      const blob = await cached.blob()
-      const objectUrl = URL.createObjectURL(blob)
-      await injectScript(objectUrl)
-      URL.revokeObjectURL(objectUrl)
-      return
-    }
-    const response = await fetch(url)
-    await cache.put(url, response.clone())
-    const blob = await response.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    await injectScript(objectUrl)
-    URL.revokeObjectURL(objectUrl)
-  } else {
-    await injectScript(url)
-  }
+  // Inject by URL directly — browser + service worker handle caching.
+  // Blob-URL approach breaks relative WASM resolution inside opencv.js.
+  await injectScript(url)
 }
 
 function injectScript(src: string): Promise<void> {
