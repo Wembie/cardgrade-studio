@@ -1,0 +1,322 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* ── Core palette: deep navy-black ── */
+    --background: 234 28% 4%;
+    --foreground: 213 31% 95%;
+
+    --card: 234 28% 7%;
+    --card-foreground: 213 31% 95%;
+
+    --popover: 234 28% 6%;
+    --popover-foreground: 213 31% 95%;
+
+    --primary: 239 84% 67%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 234 28% 12%;
+    --secondary-foreground: 213 31% 80%;
+
+    --muted: 234 28% 10%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 239 84% 67%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 234 28% 14%;
+    --input: 234 28% 10%;
+    --ring: 239 84% 67%;
+
+    --radius: 0.625rem;
+
+    /* ── App surface layers ── */
+    --surface-base: 234 28% 4%;
+    --surface-elevated: 234 28% 7%;
+    --surface-overlay: 234 28% 11%;
+
+    /* ── Grade colors (raw) ── */
+    --grade-gem-rgb: 0, 210, 255;
+    --grade-mint-rgb: 16, 185, 129;
+    --grade-good-rgb: 132, 204, 22;
+    --grade-avg-rgb: 245, 158, 11;
+    --grade-poor-rgb: 239, 68, 68;
+
+    /* ── CV overlay colors ── */
+    --overlay-centering: rgba(99, 102, 241, 0.9);
+    --overlay-defect: rgba(239, 68, 68, 0.85);
+    --overlay-edge: rgba(245, 158, 11, 0.85);
+    --overlay-corner: rgba(16, 185, 129, 0.85);
+    --overlay-heatmap-hot: rgba(239, 68, 68, 0.6);
+    --overlay-heatmap-warm: rgba(245, 158, 11, 0.4);
+    --overlay-heatmap-cool: rgba(99, 102, 241, 0.2);
+
+    --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+
+  * {
+    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html {
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-inter);
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+    overflow: hidden;
+    height: 100dvh;
+  }
+
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--muted));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--border));
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
+  }
+
+  /* Selection */
+  ::selection {
+    background: rgba(99, 102, 241, 0.3);
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer utilities {
+  /* Glass morphism */
+  .glass {
+    background: rgba(15, 15, 26, 0.7);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .glass-subtle {
+    background: rgba(15, 15, 26, 0.4);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  /* Gradient text */
+  .text-gradient {
+    background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #A78BFA 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .text-gradient-gold {
+    background: linear-gradient(135deg, #F59E0B 0%, #FCD34D 50%, #FDE68A 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Shimmer effect for loading states */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 25%,
+      hsl(var(--secondary)) 50%,
+      hsl(var(--muted)) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+  }
+
+  /* Glow effects */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.25),
+                0 0 40px rgba(99, 102, 241, 0.1);
+  }
+
+  .glow-success {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.25),
+                0 0 40px rgba(16, 185, 129, 0.1);
+  }
+
+  .glow-warning {
+    box-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+  }
+
+  .glow-error {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+  }
+
+  /* Canvas cursor states */
+  .cursor-crosshair { cursor: crosshair; }
+  .cursor-grab { cursor: grab; }
+  .cursor-grabbing { cursor: grabbing; }
+  .cursor-col-resize { cursor: col-resize; }
+  .cursor-row-resize { cursor: row-resize; }
+  .cursor-nwse-resize { cursor: nwse-resize; }
+
+  /* Panel borders with gradient */
+  .border-gradient {
+    border-image: linear-gradient(
+      to right,
+      transparent,
+      rgba(99, 102, 241, 0.4),
+      transparent
+    ) 1;
+  }
+
+  /* Noise texture overlay */
+  .noise::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    pointer-events: none;
+  }
+
+  /* Interactive highlight */
+  .interactive {
+    @apply transition-all duration-150 ease-out;
+  }
+  .interactive:hover {
+    background: hsl(var(--surface-overlay));
+  }
+
+  /* Monospace numbers (for measurements) */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+  }
+
+  /* Grade score display */
+  .grade-gem    { color: rgb(var(--grade-gem-rgb));  }
+  .grade-mint   { color: rgb(var(--grade-mint-rgb)); }
+  .grade-good   { color: rgb(var(--grade-good-rgb)); }
+  .grade-avg    { color: rgb(var(--grade-avg-rgb));  }
+  .grade-poor   { color: rgb(var(--grade-poor-rgb)); }
+
+  /* Inset top-border highlight (premium surfaces) */
+  .surface-highlight {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06),
+                0 1px 3px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Focus ring */
+  .focus-ring {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* No user select (canvas tools) */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}
+
+/* ── Canvas / CV overlays ── */
+.cv-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.centering-line {
+  position: absolute;
+  background: var(--overlay-centering);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+}
+
+.centering-line.horizontal {
+  height: 1px;
+  left: 0;
+  right: 0;
+  cursor: row-resize;
+  pointer-events: all;
+}
+
+.centering-line.vertical {
+  width: 1px;
+  top: 0;
+  bottom: 0;
+  cursor: col-resize;
+  pointer-events: all;
+}
+
+.centering-line.dragging {
+  background: rgba(139, 92, 246, 1);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.8);
+}
+
+.centering-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  transform: translate(-50%, -50%);
+  pointer-events: all;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.3);
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+
+.centering-handle:hover,
+.centering-handle.active {
+  transform: translate(-50%, -50%) scale(1.5);
+  box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2);
+}
+
+.defect-marker {
+  position: absolute;
+  border: 1.5px solid var(--overlay-defect);
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.1);
+  pointer-events: all;
+  transition: background 0.15s ease;
+}
+
+.defect-marker:hover {
+  background: rgba(239, 68, 68, 0.25);
+  z-index: 10;
+}
+
+/* Grade badge styles */
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Ruler overlay */
+.ruler-mark {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Analysis panel transitions */
+.analysis-panel-enter {
+  animation: slide-up 0.25s ease-out;
+}

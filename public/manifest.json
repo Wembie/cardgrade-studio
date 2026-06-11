@@ -1,0 +1,26 @@
+{
+  "name": "CardGrade Studio",
+  "short_name": "CardGrade",
+  "description": "Professional card grading platform — 100% in-browser, no backend, no AI",
+  "start_url": "/analyze",
+  "display": "standalone",
+  "background_color": "#080810",
+  "theme_color": "#080810",
+  "orientation": "landscape",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "productivity"],
+  "screenshots": []
+}

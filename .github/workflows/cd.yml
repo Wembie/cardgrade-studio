@@ -1,0 +1,132 @@
+name: CD — Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Required for GitHub Pages OIDC deployment
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Only one Pages deployment at a time; in-progress deploy is cancelled on new push
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  # ── Job 1: Tag the release if VERSION changed ────────────────────────────
+  tag:
+    name: Tag Version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      tagged: ${{ steps.tag.outputs.tagged }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read VERSION
+        id: read
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Version: $VERSION"
+
+      - name: Create git tag if VERSION changed
+        id: tag
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          # Check if VERSION was modified in the last commit
+          if git diff HEAD~1 HEAD -- VERSION 2>/dev/null | grep -q '^+[^+]'; then
+            # Guard against duplicate tags
+            if git ls-remote --tags origin "v${VERSION}" | grep -q "v${VERSION}"; then
+              echo "⚠️  Tag v${VERSION} already exists — skipping"
+              echo "tagged=false" >> $GITHUB_OUTPUT
+            else
+              git config user.name  "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git tag "v${VERSION}" -m "Release v${VERSION}"
+              git push origin "v${VERSION}"
+              echo "🏷️  Tagged v${VERSION}"
+              echo "tagged=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "VERSION unchanged — no tag created"
+            echo "tagged=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ── Job 2: Build & deploy to GitHub Pages ───────────────────────────────
+  deploy:
+    name: Build & Deploy
+    needs: tag
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Validations (run again on main to catch merge surprises) ─────────
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      # ── Build static export ───────────────────────────────────────────────
+      - name: Build static export
+        run: npm run build
+        env:
+          # Version shown inside the app (e.g. "v1.2.0" in sidebar)
+          NEXT_PUBLIC_APP_VERSION: ${{ needs.tag.outputs.version }}
+          # Sets next.config.ts basePath to /<repo-name> for GitHub Pages routing
+          NEXT_PUBLIC_REPO_NAME: ${{ github.event.repository.name }}
+          NODE_ENV: production
+
+      # ── Pages deployment ──────────────────────────────────────────────────
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: out/
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      # ── Deployment summary ────────────────────────────────────────────────
+      - name: Write deployment summary
+        run: |
+          VERSION="${{ needs.tag.outputs.version }}"
+          URL="${{ steps.deploy.outputs.page_url }}"
+          echo "## 🚀 CardGrade Studio deployed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | \`v${VERSION}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| URL | ${URL} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tagged | ${{ needs.tag.outputs.tagged }} |" >> $GITHUB_STEP_SUMMARY
