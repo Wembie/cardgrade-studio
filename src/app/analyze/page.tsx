@@ -9,11 +9,11 @@ import {
   Loader2
 } from 'lucide-react'
 import { cn, formatDate, generateId, fileToDataUrl, getImageDimensions } from '@/shared/lib/utils'
+import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { Button } from '@/shared/components/ui/button'
 import { Badge } from '@/shared/components/ui/badge'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/shared/components/ui/tabs'
 import { Progress } from '@/shared/components/ui/progress'
-import { ScrollArea } from '@/shared/components/ui/scroll-area'
 import { Separator } from '@/shared/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/shared/components/ui/tooltip'
 import Sidebar from '@/shared/components/layout/Sidebar'
