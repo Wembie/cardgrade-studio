@@ -30,6 +30,8 @@ export default function CenteringTool({
 }: CenteringToolProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [containerSize, setContainerSize] = useState({ w: 600, h: 400 })
+  const onCenteringChangeRef = useRef(onCenteringChange)
+  useEffect(() => { onCenteringChangeRef.current = onCenteringChange })
 
   // Centering line positions in image-space pixels
   const [lines, setLines] = useState(() => {
@@ -81,14 +83,16 @@ export default function CenteringTool({
     return () => obs.disconnect()
   }, [])
 
-  // Update centering measurement whenever lines change
+  // Update centering measurement whenever lines change.
+  // Callback stored in ref so this effect never re-runs due to a new function reference.
   useEffect(() => {
     const centering = recalculateCentering(
       lines.left, lines.right, lines.top, lines.bottom,
       imageWidth, imageHeight
     )
-    onCenteringChange(centering)
-  }, [lines, imageWidth, imageHeight, onCenteringChange])
+    onCenteringChangeRef.current(centering)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lines, imageWidth, imageHeight])
 
   // Convert screen coordinates to image coordinates
   const screenToImage = useCallback((sx: number, sy: number) => {
