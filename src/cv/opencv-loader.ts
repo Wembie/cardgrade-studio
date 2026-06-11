@@ -164,7 +164,7 @@ export interface CVRotatedRect {
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 
-const OPENCV_CDN = 'https://docs.opencv.org/4.9.0/opencv.js'
+const OPENCV_CDN = '/opencv.js'
 const CACHE_NAME = 'cardgrade-cv-v1'
 
 let loadPromise: Promise<CVInstance> | null = null

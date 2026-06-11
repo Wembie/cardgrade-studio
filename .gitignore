@@ -1,6 +1,9 @@
 # Claude Code
 CLAUDE.md
 
+# Large bundled assets (self-hosted, not committed)
+public/opencv.js
+
 # Logs
 logs
 *.log
