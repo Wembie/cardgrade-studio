@@ -186,31 +186,26 @@ function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
   }, 90_000)
 }
 
-function loadInWorker(url: string): Promise<void> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      // new Function executes with globalThis as `this` → root.cv = factory() sets globalThis.cv
-      const response = await fetch(url)
-      const code = await response.text()
-      new Function(code).call(globalThis)
-      pollForCV(resolve, reject)
-    } catch (err) {
-      reject(err instanceof Error ? err : new Error(String(err)))
-    }
-  })
+// Execute opencv.js inside the worker via new Function so it runs with globalThis as `this`.
+// The UMD wrapper does root.cv = factory() where root = this = globalThis.
+async function loadInWorker(url: string): Promise<void> {
+  const response = await fetch(url)
+  if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
+  const code = await response.text()
+  new Function(code).call(globalThis)
 }
 
 function loadInMainThread(url: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const existing = document.querySelector('script[data-opencv]')
-    if (existing) { pollForCV(resolve, reject); return }
+    if (existing) { resolve(); return }
     const script = document.createElement('script')
     script.setAttribute('data-opencv', '1')
     script.async = true
     script.src = url
+    script.onload = () => resolve()
     script.onerror = () => reject(new Error('Failed to load OpenCV.js'))
     document.head.appendChild(script)
-    pollForCV(resolve, reject)
   })
 }
 
@@ -218,10 +213,11 @@ export function loadOpenCV(): Promise<CVInstance> {
   if (loadPromise) return loadPromise
 
   loadPromise = (async () => {
-    const g = globalThis as unknown as Record<string, CVInstance>
-    if (g['cv']?.Mat) return g['cv']
+    const g = globalThis as unknown as Record<string, unknown>
+    const cached = g['cv'] as CVInstance | undefined
+    if (cached?.Mat) return cached
 
-    ;(globalThis as Record<string, unknown>)['Module'] = { onRuntimeInitialized() {} }
+    g['Module'] = { onRuntimeInitialized() {} }
 
     if (isWorkerContext()) {
       await loadInWorker(OPENCV_URL)
@@ -229,7 +225,18 @@ export function loadOpenCV(): Promise<CVInstance> {
       await loadInMainThread(OPENCV_URL)
     }
 
-    return g['cv']
+    // Modern Emscripten: cv(Module) returns a Promise — resolve it to get the real instance
+    const cv = g['cv']
+    if (cv && typeof (cv as { then?: unknown }).then === 'function') {
+      g['cv'] = await (cv as Promise<CVInstance>)
+    }
+
+    // Some builds set cv synchronously but populate bindings (Mat etc.) async
+    if (!(g['cv'] as CVInstance | undefined)?.Mat) {
+      await new Promise<void>((resolve, reject) => pollForCV(resolve, reject))
+    }
+
+    return g['cv'] as CVInstance
   })()
 
   loadPromise.catch(() => { loadPromise = null })
