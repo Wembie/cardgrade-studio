@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Version enforcement ────────────────────────────────────────────────
+      # Every PR must bump the VERSION file. Keeps a clean release trail.
+      - name: Enforce VERSION bump
+        if: github.event_name == 'pull_request'
+        run: |
+          CHANGED=$(git diff origin/${{ github.base_ref }} HEAD -- VERSION)
+          if [ -z "$CHANGED" ]; then
+            echo "❌ VERSION file must be updated in every PR."
+            echo "   Edit VERSION and bump the semver (e.g. 1.0.0 → 1.0.1)"
+            exit 1
+          fi
+          NEW_VERSION=$(cat VERSION)
+          echo "✅ VERSION bumped to $NEW_VERSION"
+
+      # ── Node setup ────────────────────────────────────────────────────────
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Code quality ──────────────────────────────────────────────────────
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      # ── Build validation ──────────────────────────────────────────────────
+      # Builds the full static export to catch any runtime-breaking errors.
+      - name: Build static export
+        run: npm run build
+        env:
+          NEXT_PUBLIC_APP_VERSION: ${{ github.event.pull_request.head.sha }}
+          NEXT_PUBLIC_REPO_NAME: ''   # local-style build (no basePath)
+
+      # ── Artifact size audit ───────────────────────────────────────────────
+      - name: Report bundle size
+        run: |
+          echo "### 📦 Build Output" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          du -sh out/ 2>/dev/null || echo "out/ not found"
+          find out -name "*.js" -not -path "*/node_modules/*" | \
+            xargs du -sh 2>/dev/null | sort -rh | head -10 >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
