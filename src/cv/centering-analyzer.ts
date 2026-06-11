@@ -33,7 +33,6 @@ export async function analyzeCentering(correctedImageData: ImageData): Promise<C
  * Detect inner border edges from a grayscale card Mat.
  * Returns pixel distances from each outer edge to the inner design boundary.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function detectBorders(gray: any, W: number, H: number, cv: Awaited<ReturnType<typeof loadOpenCV>>): BorderMeasurement {
   // Apply Sobel to get vertical/horizontal edges
   const sobelX = new cv.Mat()

@@ -73,7 +73,6 @@ export async function analyzeSurface(correctedImageData: ImageData): Promise<Sur
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function detectWhitening(pixels: Uint8ClampedArray, W: number, H: number, cv: Awaited<ReturnType<typeof loadOpenCV>>, _gray: any): SurfaceDefect[] {
   const defects: SurfaceDefect[] = []
   const cellW = Math.floor(W / GRID_COLS)
@@ -129,7 +128,6 @@ function detectWhitening(pixels: Uint8ClampedArray, W: number, H: number, cv: Aw
   return mergeAdjacentDefects(defects, 'whitening')
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function detectScratches(cv: Awaited<ReturnType<typeof loadOpenCV>>, gray: any, W: number,
   H: number
 ): SurfaceDefect[] {

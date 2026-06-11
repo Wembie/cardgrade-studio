@@ -91,7 +91,6 @@ export default function CenteringTool({
       imageWidth, imageHeight
     )
     onCenteringChangeRef.current(centering)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lines, imageWidth, imageHeight])
 
   // Convert screen coordinates to image coordinates
@@ -498,7 +497,7 @@ export default function CenteringTool({
 
       {/* Instructions */}
       <p className="text-xs text-muted-foreground text-center">
-        Drag the colored lines to align with the card's printed border. Scroll to zoom.
+        Drag the colored lines to align with the card&apos;s printed border. Scroll to zoom.
       </p>
     </div>
   )
