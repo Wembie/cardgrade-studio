@@ -187,12 +187,21 @@ function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
 }
 
 // Execute opencv.js inside the worker via new Function so it runs with globalThis as `this`.
-// The UMD wrapper does root.cv = factory() where root = this = globalThis.
+// We fake importScripts (no-op) so opencv.js detects ENVIRONMENT_IS_WORKER=true instead of
+// falling into ENVIRONMENT_IS_SHELL=true, which uses node-style sync file I/O that doesn't
+// exist in browser workers.
 async function loadInWorker(url: string): Promise<void> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
   const code = await response.text()
-  new Function(code).call(globalThis)
+  const g = globalThis as Record<string, unknown>
+  const hadImportScripts = 'importScripts' in g
+  if (!hadImportScripts) g['importScripts'] = () => {}
+  try {
+    new Function(code).call(globalThis)
+  } finally {
+    if (!hadImportScripts) delete g['importScripts']
+  }
 }
 
 function loadInMainThread(url: string): Promise<void> {
@@ -217,7 +226,7 @@ export function loadOpenCV(): Promise<CVInstance> {
     const cached = g['cv'] as CVInstance | undefined
     if (cached?.Mat) return cached
 
-    g['Module'] = { onRuntimeInitialized() {} }
+    g['Module'] = {}
 
     if (isWorkerContext()) {
       await loadInWorker(OPENCV_URL)
