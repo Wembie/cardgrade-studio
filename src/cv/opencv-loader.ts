@@ -190,9 +190,30 @@ async function loadInWorker(url: string): Promise<void> {
   console.log('[CV] fetching', url)
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
-  console.log('[CV] fetch ok, running new Function...')
   const code = await response.text()
+  console.log('[CV] fetch ok, pre-decoding WASM binary...')
+
   const g = globalThis as Record<string, unknown>
+
+  // Emscripten's getBinaryPromise() calls fetch(dataUri) in WORKER mode.
+  // Chrome workers hang on fetch() with data: URIs — the promise never resolves.
+  // Fix: extract the embedded WASM base64, decode it, set Module.wasmBinary.
+  // When wasmBinary is set, getBinaryPromise skips fetch and uses new Uint8Array(wasmBinary) directly.
+  const wasmPrefix = 'wasmBinaryFile="data:application/octet-stream;base64,'
+  const prefixIdx = code.indexOf(wasmPrefix)
+  if (prefixIdx !== -1) {
+    const b64Start = prefixIdx + wasmPrefix.length
+    const b64End = code.indexOf('"', b64Start)
+    const base64 = code.slice(b64Start, b64End)
+    const binaryStr = atob(base64)
+    const wasmBytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0))
+    ;(g['Module'] as Record<string, unknown>)['wasmBinary'] = wasmBytes.buffer
+    console.log('[CV] wasmBinary pre-decoded:', wasmBytes.length, 'bytes')
+  } else {
+    console.warn('[CV] wasmBinaryFile pattern not found — using default loading path')
+  }
+
+  // Fake importScripts so ENVIRONMENT_IS_WORKER=true (avoids document.currentScript TypeError in SHELL mode)
   const hadImportScripts = 'importScripts' in g
   if (!hadImportScripts) g['importScripts'] = () => {}
   try {
