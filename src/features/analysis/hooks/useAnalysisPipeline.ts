@@ -1,59 +1,73 @@
 'use client'
 
-import { useCallback, useEffect, useRef } from 'react'
-import * as Comlink from 'comlink'
+import { useCallback } from 'react'
 import { useAnalysisStore } from '../store'
 import { dataUrlToImageData } from '@/shared/lib/utils'
-import type { CVWorkerApi } from '@/workers/cv-pipeline.worker'
-import type { AnalysisPhase } from '../store'
+import { loadOpenCV } from '@/cv/opencv-loader'
+import { checkScanQuality } from '@/cv/quality-checker'
+import { detectCard } from '@/cv/card-detector'
+import { analyzeCentering } from '@/cv/centering-analyzer'
+import { analyzeSurface } from '@/cv/surface-analyzer'
+import { analyzeEdges } from '@/cv/edge-analyzer'
+import { estimateAllGrades } from '@/features/grading-engine/engine'
+
+// Yield to the browser event loop between heavy sync CV steps so the progress UI can repaint.
+const tick = () => new Promise<void>(r => setTimeout(r, 0))
 
 export function useAnalysisPipeline() {
   const store = useAnalysisStore()
-  const workerRef = useRef<Worker | null>(null)
-  const apiRef = useRef<Comlink.Remote<CVWorkerApi> | null>(null)
-
-  useEffect(() => {
-    const worker = new Worker(
-      new URL('../../../workers/cv-pipeline.worker', import.meta.url)
-    )
-    workerRef.current = worker
-    apiRef.current = Comlink.wrap<CVWorkerApi>(worker)
-
-    return () => {
-      worker.terminate()
-      workerRef.current = null
-      apiRef.current = null
-    }
-  }, [])
 
   const runAnalysis = useCallback(async (dataUrl: string) => {
-    const api = apiRef.current
-    if (!api) return
-
     store.setError(null)
     store.setPhase('loading_cv', 2)
 
     try {
       const imageData = await dataUrlToImageData(dataUrl)
-      // Transfer the pixel buffer zero-copy to worker
-      const buffer = imageData.data.buffer.slice(0)
 
-      const result = await api.runPipeline(
-        Comlink.transfer(buffer, [buffer]),
-        imageData.width,
-        imageData.height,
-        Comlink.proxy((phase: string, progress: number) => {
-          store.setPhase(phase as AnalysisPhase, progress)
-        })
-      )
+      // WASM compilation is async — main thread stays responsive during the ~15-30s wait.
+      await loadOpenCV()
 
-      store.setQuality(result.quality)
-      if (result.bounds) store.setCardBounds(result.bounds)
-      if (result.correctedDataUrl) store.setCorrectedDataUrl(result.correctedDataUrl)
-      store.setCentering(result.centering)
-      store.setSurface(result.surface)
-      store.setEdges(result.edges)
-      store.setGrades(result.grades)
+      store.setPhase('detecting', 10)
+      await tick()
+      const quality = checkScanQuality(imageData)
+
+      store.setPhase('detecting', 20)
+      await tick()
+      const { bounds, correctedImageData } = await detectCard(imageData)
+      const workingData = correctedImageData ?? imageData
+
+      let correctedDataUrl: string | null = null
+      if (correctedImageData) {
+        const canvas = document.createElement('canvas')
+        canvas.width = correctedImageData.width
+        canvas.height = correctedImageData.height
+        canvas.getContext('2d')!.putImageData(correctedImageData, 0, 0)
+        correctedDataUrl = canvas.toDataURL('image/jpeg', 0.92)
+      }
+
+      store.setPhase('centering', 40)
+      await tick()
+      const centering = await analyzeCentering(workingData)
+
+      store.setPhase('surface', 60)
+      await tick()
+      const surface = await analyzeSurface(workingData)
+
+      store.setPhase('edges', 80)
+      await tick()
+      const edges = await analyzeEdges(workingData)
+
+      store.setPhase('grading', 95)
+      await tick()
+      const grades = estimateAllGrades(centering, surface, edges)
+
+      store.setQuality(quality)
+      if (bounds) store.setCardBounds(bounds)
+      if (correctedDataUrl) store.setCorrectedDataUrl(correctedDataUrl)
+      store.setCentering(centering)
+      store.setSurface(surface)
+      store.setEdges(edges)
+      store.setGrades(grades)
       store.setPhase('complete', 100)
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Analysis failed'
