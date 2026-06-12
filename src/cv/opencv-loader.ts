@@ -186,13 +186,11 @@ function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
   }, 90_000)
 }
 
-// Execute opencv.js inside the worker via new Function so it runs with globalThis as `this`.
-// We fake importScripts (no-op) so opencv.js detects ENVIRONMENT_IS_WORKER=true instead of
-// falling into ENVIRONMENT_IS_SHELL=true, which uses node-style sync file I/O that doesn't
-// exist in browser workers.
 async function loadInWorker(url: string): Promise<void> {
+  console.log('[CV] fetching', url)
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
+  console.log('[CV] fetch ok, running new Function...')
   const code = await response.text()
   const g = globalThis as Record<string, unknown>
   const hadImportScripts = 'importScripts' in g
@@ -202,6 +200,7 @@ async function loadInWorker(url: string): Promise<void> {
   } finally {
     if (!hadImportScripts) delete g['importScripts']
   }
+  console.log('[CV] new Function done, cv type:', typeof g['cv'], 'has .then:', typeof (g['cv'] as {then?:unknown})?.then)
 }
 
 function loadInMainThread(url: string): Promise<void> {
@@ -239,17 +238,17 @@ export function loadOpenCV(): Promise<CVInstance> {
       await loadInMainThread(OPENCV_URL)
     }
 
-    // Module.then is a thenable that resolves once WASM + bindings are ready.
-    // Race with a hard timeout so a silent WASM failure produces an error instead of
-    // hanging forever.
     const cv = g['cv']
+    console.log('[CV] post-load cv:', typeof cv, 'thenable:', !!(cv && typeof (cv as {then?:unknown}).then === 'function'))
     if (cv && typeof (cv as { then?: unknown }).then === 'function') {
+      console.log('[CV] awaiting cv thenable (WASM compile)...')
       g['cv'] = await Promise.race([
         cv as Promise<CVInstance>,
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('OpenCV WASM init timed out (60s)')), 60_000)
         ),
       ])
+      console.log('[CV] cv thenable resolved, Mat:', !!(g['cv'] as CVInstance | undefined)?.Mat)
     }
 
     // Fallback: some builds expose cv synchronously but populate Mat async
