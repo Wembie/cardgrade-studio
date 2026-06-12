@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Wembie/cardgrade-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Wembie/cardgrade-studio/actions/workflows/ci.yml)
 [![CD](https://github.com/Wembie/cardgrade-studio/actions/workflows/cd.yml/badge.svg)](https://github.com/Wembie/cardgrade-studio/actions/workflows/cd.yml)
-![Version](https://img.shields.io/badge/version-1.0.0-indigo)
+![Version](https://img.shields.io/badge/version-1.0.1-indigo)
 
 CardGrade Studio estimates PSA, BGS, CGC, and SGC grades using classical computer vision (OpenCV.js) running entirely in the browser. No image ever leaves your device.
 
