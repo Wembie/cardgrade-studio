@@ -50,9 +50,10 @@ const cvWorkerApi = {
     height: number,
     onProgress: ProgressCallback
   ): Promise<PipelineResult> {
-    // Load OpenCV WASM — blocks this worker thread, NOT the main thread
     onProgress('loading_cv', 2)
-    await loadOpenCV()
+    console.log('[CV Worker] calling loadOpenCV...')
+    const cvInstance = await loadOpenCV()
+    console.log('[CV Worker] loadOpenCV done, cv.Mat:', !!cvInstance?.Mat)
 
     const pixels = new Uint8ClampedArray(pixelBuffer)
     const imageData = new ImageData(pixels, width, height)

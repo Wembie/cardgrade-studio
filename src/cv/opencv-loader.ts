@@ -226,7 +226,12 @@ export function loadOpenCV(): Promise<CVInstance> {
     const cached = g['cv'] as CVInstance | undefined
     if (cached?.Mat) return cached
 
-    g['Module'] = {}
+    // printErr/onAbort surface WASM errors to DevTools console without overriding
+    // onRuntimeInitialized (which Emscripten sets AFTER the early moduleOverrides restore).
+    g['Module'] = {
+      printErr: (msg: string) => console.error('[OpenCV]', msg),
+      onAbort: (msg: string) => console.error('[OpenCV abort]', msg),
+    }
 
     if (isWorkerContext()) {
       await loadInWorker(OPENCV_URL)
@@ -234,13 +239,20 @@ export function loadOpenCV(): Promise<CVInstance> {
       await loadInMainThread(OPENCV_URL)
     }
 
-    // Modern Emscripten: cv(Module) returns a Promise — resolve it to get the real instance
+    // Module.then is a thenable that resolves once WASM + bindings are ready.
+    // Race with a hard timeout so a silent WASM failure produces an error instead of
+    // hanging forever.
     const cv = g['cv']
     if (cv && typeof (cv as { then?: unknown }).then === 'function') {
-      g['cv'] = await (cv as Promise<CVInstance>)
+      g['cv'] = await Promise.race([
+        cv as Promise<CVInstance>,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('OpenCV WASM init timed out (60s)')), 60_000)
+        ),
+      ])
     }
 
-    // Some builds set cv synchronously but populate bindings (Mat etc.) async
+    // Fallback: some builds expose cv synchronously but populate Mat async
     if (!(g['cv'] as CVInstance | undefined)?.Mat) {
       await new Promise<void>((resolve, reject) => pollForCV(resolve, reject))
     }
