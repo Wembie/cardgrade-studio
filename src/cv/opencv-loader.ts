@@ -168,97 +168,66 @@ const OPENCV_URL = '/opencv.js'
 
 let loadPromise: Promise<CVInstance> | null = null
 
-function isWorkerContext(): boolean {
-  return typeof WorkerGlobalScope !== 'undefined' &&
-    typeof self !== 'undefined' &&
-    self instanceof WorkerGlobalScope
-}
-
-function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
-  const g = globalThis as unknown as Record<string, CVInstance>
-  if (g['cv']?.Mat) { resolve(); return }
-  const poll = setInterval(() => {
-    if (g['cv']?.Mat) { clearInterval(poll); clearTimeout(timeout); resolve() }
-  }, 50)
-  const timeout = setTimeout(() => {
-    clearInterval(poll)
-    reject(new Error('OpenCV.js init timeout'))
-  }, 90_000)
-}
-
-// Unified loader for both main thread and workers.
-// Emscripten's getBinaryPromise() calls fetch(data:URI) in WEB/WORKER mode — Chrome hangs on
-// that in workers and it is unreliable in the main thread too. Pre-decoding the embedded WASM
-// binary and setting Module.wasmBinary bypasses the fetch path entirely.
-async function loadOpenCVCode(url: string): Promise<void> {
-  const response = await fetch(url)
-  if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
-  const code = await response.text()
-
-  const g = globalThis as Record<string, unknown>
-
-  const wasmPrefix = 'wasmBinaryFile="data:application/octet-stream;base64,'
-  const prefixIdx = code.indexOf(wasmPrefix)
-  if (prefixIdx !== -1) {
-    const b64Start = prefixIdx + wasmPrefix.length
-    const b64End = code.indexOf('"', b64Start)
-    const base64 = code.slice(b64Start, b64End)
-    const binaryStr = atob(base64)
-    const wasmBytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0))
-    ;(g['Module'] as Record<string, unknown>)['wasmBinary'] = wasmBytes.buffer
-    console.log('[CV] wasmBinary pre-decoded:', wasmBytes.length, 'bytes')
-  }
-
-  // In module workers importScripts is undefined → ENVIRONMENT_IS_SHELL=true
-  // → document.currentScript throws (document is undefined in workers).
-  // Fake importScripts → ENVIRONMENT_IS_WORKER=true, which takes the safe path.
-  const inWorker = isWorkerContext()
-  const hadImportScripts = 'importScripts' in g
-  if (inWorker && !hadImportScripts) g['importScripts'] = () => {}
-  try {
-    new Function(code).call(globalThis)
-  } finally {
-    if (inWorker && !hadImportScripts) delete g['importScripts']
-  }
-}
-
+// Script-tag injection is the ONLY correct approach for browser loading.
+//
+// History of failed approaches (do not retry these):
+//
+// 1. new Function(code).call(globalThis) + wasmBinary pre-decode
+//    PROBLEM A: Uint8Array.from(binaryStr, c => c.charCodeAt(0)) iterates ~6 million chars
+//    synchronously on the main thread → blocks UI + prevents setTimeout from firing → user
+//    sees infinite "Loading CV engine" with no timeout ever triggering.
+//    PROBLEM B: opencv.js wraps Emscripten in a UMD factory function. Inside that factory,
+//    `var Module = typeof Module != 'undefined' ? Module : {}` creates a LOCAL variable
+//    (hoisting makes typeof Module → 'undefined' before assignment). window.Module is NEVER
+//    seen by Emscripten → wasmBinary injection is a no-op → Emscripten still fetches data:URI.
+//
+// 2. new Function(code) without wasmBinary
+//    Same PROBLEM A. Also same PROBLEM B for any Module hooks.
+//
+// Script tags: loaded async by the browser (non-blocking), execute at correct scope,
+// UMD sets window.cv = factory() where cv is a thenable. We await it via onload + .then().
+// fetch('data:URI') works fine in the main thread (only hangs in Web Workers).
 export function loadOpenCV(): Promise<CVInstance> {
   if (loadPromise) return loadPromise
 
-  loadPromise = (async () => {
-    const g = globalThis as unknown as Record<string, unknown>
-    const cached = g['cv'] as CVInstance | undefined
-    if (cached?.Mat) return cached
+  loadPromise = new Promise<CVInstance>((resolve, reject) => {
+    const w = globalThis as unknown as Record<string, unknown>
 
-    // printErr/onAbort surface WASM errors to DevTools console without overriding
-    // onRuntimeInitialized (which Emscripten sets AFTER the early moduleOverrides restore).
-    g['Module'] = {
-      printErr: (msg: string) => console.error('[OpenCV]', msg),
-      onAbort: (msg: string) => console.error('[OpenCV abort]', msg),
+    const existing = w['cv'] as CVInstance | undefined
+    if (existing?.Mat) { resolve(existing); return }
+
+    const timer = setTimeout(
+      () => reject(new Error('OpenCV.js init timeout (120s)')),
+      120_000
+    )
+
+    const done = (cv: CVInstance) => { clearTimeout(timer); resolve(cv) }
+    const fail = (e: Error) => { clearTimeout(timer); reject(e) }
+
+    const script = document.createElement('script')
+    script.src = OPENCV_URL
+    script.async = true
+
+    script.onerror = () => fail(new Error('Failed to load /opencv.js'))
+
+    script.onload = () => {
+      const raw = w['cv']
+      if (!raw) { fail(new Error('cv not defined after script load')); return }
+
+      if (typeof (raw as { then?: unknown }).then === 'function') {
+        // Async WASM build: cv is a thenable that resolves when WASM compilation finishes
+        ;(raw as Promise<CVInstance>).then(done, (e) =>
+          fail(e instanceof Error ? e : new Error(String(e)))
+        )
+      } else if ((raw as CVInstance).Mat) {
+        done(raw as CVInstance)
+      } else {
+        fail(new Error('cv loaded but Mat unavailable'))
+      }
     }
 
-    await loadOpenCVCode(OPENCV_URL)
-
-    const cv = g['cv']
-    console.log('[CV] post-load cv:', typeof cv, 'thenable:', !!(cv && typeof (cv as {then?:unknown}).then === 'function'))
-    if (cv && typeof (cv as { then?: unknown }).then === 'function') {
-      console.log('[CV] awaiting cv thenable (WASM compile)...')
-      g['cv'] = await Promise.race([
-        cv as Promise<CVInstance>,
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('OpenCV WASM init timed out (60s)')), 60_000)
-        ),
-      ])
-      console.log('[CV] cv thenable resolved, Mat:', !!(g['cv'] as CVInstance | undefined)?.Mat)
-    }
-
-    // Fallback: some builds expose cv synchronously but populate Mat async
-    if (!(g['cv'] as CVInstance | undefined)?.Mat) {
-      await new Promise<void>((resolve, reject) => pollForCV(resolve, reject))
-    }
-
-    return g['cv'] as CVInstance
-  })()
+    document.head.appendChild(script)
+  })
 
   loadPromise.catch(() => { loadPromise = null })
   return loadPromise
