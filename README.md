@@ -1,24 +1,31 @@
 # CardGrade Studio
 
-> Professional trading card grading — 100% in-browser, no backend, no AI cloud, fully offline.
+> Professional trading card grading — mathematical precision, zero AI, runs entirely in your browser.
 
 [![CI](https://github.com/Wembie/cardgrade-studio/actions/workflows/ci.yml/badge.svg)](https://github.com/Wembie/cardgrade-studio/actions/workflows/ci.yml)
 [![CD](https://github.com/Wembie/cardgrade-studio/actions/workflows/cd.yml/badge.svg)](https://github.com/Wembie/cardgrade-studio/actions/workflows/cd.yml)
 ![Version](https://img.shields.io/badge/version-1.0.1-indigo)
 
-CardGrade Studio estimates PSA, BGS, CGC, and SGC grades using classical computer vision (OpenCV.js) running entirely in the browser. No image ever leaves your device.
+CardGrade Studio estimates PSA, BGS, CGC, and SGC grades using pure mathematical analysis running entirely in the browser. No image ever leaves your device.
 
 ---
 
+## How It Works
+
+1. **Upload** — Drop a clear photo of your card
+2. **Align** — Drag four corner handles to match the card edges exactly; a built-in level indicator shows tilt angle
+3. **Analyze** — Click Analyze; results appear instantly
+
 ## Features
 
-- **Card detection** — Canny edge detection + contour finding + perspective correction
-- **Centering tool** — Interactive canvas with draggable L/R/T/B measurement lines; real-time ratio display
-- **Surface analysis** — Grid-based whitening detection, Canny-based scratch mapping, defect heatmap overlay
-- **Edge & corner analysis** — Per-edge whitening, roughness score, chip/ding detection, corner sharpness
-- **Grading engine** — Heuristic scoring for PSA (1–10), BGS (1–10 with half-points), CGC (1–10), SGC (1–100); company-specific weight profiles and centering tolerances
-- **Collection manager** — IndexedDB persistence via Dexie.js; scan history with PDF export (jsPDF)
-- **Offline-first PWA** — Service worker caches OpenCV.js (~8 MB) and shell assets; works with no internet after first load
+- **Perspective warp** — DLT homography (8×8 linear system, Gaussian elimination) maps your card to a standard 500×700 rectangle
+- **Centering measurement** — Rolling-variance border scan detects the artwork edge on all four sides; computes L/R and T/B ratios
+- **Surface analysis** — Grayscale → Gaussian blur → Sobel magnitude; scratch and defect density scoring
+- **Edge analysis** — Per-edge std-dev scoring, chip count estimation
+- **Corner analysis** — Per-corner variance scoring
+- **Grading engine** — Company-specific weight profiles and threshold tables for PSA (1–10), BGS (1–10 with half-points + Black Label), CGC (1–10 with half-points), SGC (1–10 with half-points)
+- **Level indicator** — Computes card tilt from corner positions; displays bubble-level UI
+- **PWA** — Service worker caches app shell; works offline after first load
 
 ## Tech Stack
 
@@ -28,10 +35,7 @@ CardGrade Studio estimates PSA, BGS, CGC, and SGC grades using classical compute
 | Language | TypeScript 5 |
 | Styling | Tailwind CSS v3 + shadcn/ui (Radix primitives) |
 | Animation | Framer Motion 11 |
-| State | Zustand 5 + Immer |
-| Persistence | Dexie.js (IndexedDB) |
-| CV | OpenCV.js 4.9.0 (lazy CDN load, Cache API) |
-| PDF | jsPDF + html2canvas |
+| Math | Pure JS + Canvas API (no OpenCV) |
 | Validation | Zod |
 
 ## Getting Started
@@ -56,7 +60,7 @@ npm run dev          # http://localhost:3000
 
 Push to `main` → CD workflow builds and deploys to GitHub Pages automatically.
 
-The `basePath` is injected at build time via `NEXT_PUBLIC_REPO_NAME` (set by the workflow from `${{ github.event.repository.name }}`).
+`basePath` is injected at build time via `NEXT_PUBLIC_REPO_NAME` (set by the workflow).
 
 ### Manual
 
@@ -67,59 +71,44 @@ npm run build
 
 ## Versioning
 
-Version is tracked in the `VERSION` file at the repo root (plain semver, e.g. `1.0.0`).
-
-- Read at build time by `next.config.ts` → injected as `NEXT_PUBLIC_APP_VERSION`
-- Displayed in the app sidebar
-- CI enforces a `VERSION` bump on every PR
-- CD auto-creates a git tag (`v1.0.0`) when `VERSION` changes on `main`
-
-To release a new version:
-
-1. Bump `VERSION` (e.g. `1.0.1`)
-2. Open a PR → CI validates the bump
-3. Merge → CD tags + deploys automatically
+Version lives in the `VERSION` file (plain semver). CI enforces a bump on every PR. CD auto-tags and deploys on merge to `main`.
 
 ## Project Structure
 
 ```
 src/
-├── app/                    # Next.js App Router pages
-│   ├── page.tsx            # Landing / upload
-│   ├── analyze/            # Main grading workspace
-│   ├── collection/         # Saved scans
-│   └── history/            # Grading history
-├── cv/                     # OpenCV.js wrappers
-│   ├── opencv-loader.ts    # Lazy CDN load + Cache API
-│   ├── card-detector.ts    # Edge → contour → perspective warp
-│   ├── centering-analyzer.ts
-│   ├── surface-analyzer.ts
-│   ├── edge-analyzer.ts
-│   └── quality-checker.ts  # Blur, glare, luminance
+├── app/
+│   ├── page.tsx            # Marketing landing page
+│   └── analyze/            # Card grading workspace
+├── math/                   # Pure JS math engine (no dependencies)
+│   ├── perspective.ts      # DLT homography + inverse warp
+│   ├── centering.ts        # Border detection → L/R/T/B ratios
+│   ├── surface.ts          # Sobel surface analysis
+│   ├── edges.ts            # Edge band scoring
+│   ├── corners.ts          # Corner region scoring
+│   └── grading.ts          # PSA / BGS / CGC / SGC formulas
 ├── features/
-│   ├── analysis/           # Zustand store + pipeline hook
-│   ├── centering/          # Interactive centering tool
-│   ├── surface-analysis/   # Defect overlay + heatmap
-│   ├── edge-analysis/      # Corner zoom + edge detail
-│   ├── grading-engine/     # PSA/BGS/CGC/SGC scoring
-│   └── upload/             # Drag/drop/paste zone
+│   └── analyzer/           # Upload, border adjuster, level, results
 ├── shared/
 │   ├── components/         # UI primitives + layout
 │   ├── lib/                # Utilities
 │   └── types/              # Shared TypeScript interfaces
-└── storage/                # Dexie.js schemas + repos
+public/
+├── sw.js                   # Service worker (app shell cache)
+└── manifest.json           # PWA manifest
 ```
 
-## CV Pipeline
+## Analysis Pipeline
 
 ```
 Upload image
-  → Quality check (blur score, glare ratio, luminance)
-  → Card detection (Canny → contours → approxPolyDP → 4-corner warp)
-  → Centering analysis (Sobel border detection → L/R/T/B ratios)
-  → Surface analysis (grid whitening + scratch grid → defect map)
-  → Edge/corner analysis (band sampling → whitening + roughness + chips)
-  → Grade estimation (weighted heuristic per company)
+  → User positions 4 corner handles
+  → warpPerspective (DLT homography → 500×700 ImageData)
+  → analyzeCentering (rolling-variance border scan)
+  → analyzeSurface   (Gaussian blur → Sobel → defect density)
+  → analyzeEdges     (band std-dev → per-edge score)
+  → analyzeCorners   (region std-dev → per-corner score)
+  → estimateGrades   (weighted formulas → PSA / BGS / CGC / SGC)
 ```
 
 ## License

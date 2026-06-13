@@ -1,62 +1,23 @@
-const CACHE_NAME = 'cardgrade-studio-v1'
-const CV_CACHE = 'cardgrade-cv-v2'
+const CACHE = 'cardgrade-v2'
+const SHELL = ['/', '/analyze/']
 
-// App shell assets to cache on install
-const SHELL_ASSETS = [
-  '/',
-  '/analyze',
-  '/collection',
-]
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(SHELL_ASSETS))
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())
   )
-  self.skipWaiting()
 })
 
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((k) => k !== CACHE_NAME && k !== CV_CACHE)
-          .map((k) => caches.delete(k))
-      )
-    )
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   )
-  self.clients.claim()
 })
 
-self.addEventListener('fetch', (event) => {
-  const { request } = event
-  const url = new URL(request.url)
-
-  // Cache opencv.js and opencv.wasm aggressively
-  if (url.href.includes('opencv.js') || url.href.includes('opencv.wasm')) {
-    event.respondWith(
-      caches.open(CV_CACHE).then(async (cache) => {
-        const cached = await cache.match(request)
-        if (cached) return cached
-        const response = await fetch(request)
-        cache.put(request, response.clone())
-        return response
-      })
-    )
-    return
-  }
-
-  // Network-first for API/dynamic routes, cache-first for static assets
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/static/')) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(request)
-        if (cached) return cached
-        const response = await fetch(request)
-        cache.put(request, response.clone())
-        return response
-      })
-    )
-    return
-  }
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return
+  e.respondWith(
+    caches.match(e.request).then(cached => cached || fetch(e.request))
+  )
 })
