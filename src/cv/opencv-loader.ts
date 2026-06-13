@@ -186,19 +186,17 @@ function pollForCV(resolve: () => void, reject: (e: Error) => void): void {
   }, 90_000)
 }
 
-async function loadInWorker(url: string): Promise<void> {
-  console.log('[CV] fetching', url)
+// Unified loader for both main thread and workers.
+// Emscripten's getBinaryPromise() calls fetch(data:URI) in WEB/WORKER mode — Chrome hangs on
+// that in workers and it is unreliable in the main thread too. Pre-decoding the embedded WASM
+// binary and setting Module.wasmBinary bypasses the fetch path entirely.
+async function loadOpenCVCode(url: string): Promise<void> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`Failed to fetch OpenCV.js: ${response.status}`)
   const code = await response.text()
-  console.log('[CV] fetch ok, pre-decoding WASM binary...')
 
   const g = globalThis as Record<string, unknown>
 
-  // Emscripten's getBinaryPromise() calls fetch(dataUri) in WORKER mode.
-  // Chrome workers hang on fetch() with data: URIs — the promise never resolves.
-  // Fix: extract the embedded WASM base64, decode it, set Module.wasmBinary.
-  // When wasmBinary is set, getBinaryPromise skips fetch and uses new Uint8Array(wasmBinary) directly.
   const wasmPrefix = 'wasmBinaryFile="data:application/octet-stream;base64,'
   const prefixIdx = code.indexOf(wasmPrefix)
   if (prefixIdx !== -1) {
@@ -209,33 +207,19 @@ async function loadInWorker(url: string): Promise<void> {
     const wasmBytes = Uint8Array.from(binaryStr, c => c.charCodeAt(0))
     ;(g['Module'] as Record<string, unknown>)['wasmBinary'] = wasmBytes.buffer
     console.log('[CV] wasmBinary pre-decoded:', wasmBytes.length, 'bytes')
-  } else {
-    console.warn('[CV] wasmBinaryFile pattern not found — using default loading path')
   }
 
-  // Fake importScripts so ENVIRONMENT_IS_WORKER=true (avoids document.currentScript TypeError in SHELL mode)
+  // In module workers importScripts is undefined → ENVIRONMENT_IS_SHELL=true
+  // → document.currentScript throws (document is undefined in workers).
+  // Fake importScripts → ENVIRONMENT_IS_WORKER=true, which takes the safe path.
+  const inWorker = isWorkerContext()
   const hadImportScripts = 'importScripts' in g
-  if (!hadImportScripts) g['importScripts'] = () => {}
+  if (inWorker && !hadImportScripts) g['importScripts'] = () => {}
   try {
     new Function(code).call(globalThis)
   } finally {
-    if (!hadImportScripts) delete g['importScripts']
+    if (inWorker && !hadImportScripts) delete g['importScripts']
   }
-  console.log('[CV] new Function done, cv type:', typeof g['cv'], 'has .then:', typeof (g['cv'] as {then?:unknown})?.then)
-}
-
-function loadInMainThread(url: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const existing = document.querySelector('script[data-opencv]')
-    if (existing) { resolve(); return }
-    const script = document.createElement('script')
-    script.setAttribute('data-opencv', '1')
-    script.async = true
-    script.src = url
-    script.onload = () => resolve()
-    script.onerror = () => reject(new Error('Failed to load OpenCV.js'))
-    document.head.appendChild(script)
-  })
 }
 
 export function loadOpenCV(): Promise<CVInstance> {
@@ -253,11 +237,7 @@ export function loadOpenCV(): Promise<CVInstance> {
       onAbort: (msg: string) => console.error('[OpenCV abort]', msg),
     }
 
-    if (isWorkerContext()) {
-      await loadInWorker(OPENCV_URL)
-    } else {
-      await loadInMainThread(OPENCV_URL)
-    }
+    await loadOpenCVCode(OPENCV_URL)
 
     const cv = g['cv']
     console.log('[CV] post-load cv:', typeof cv, 'thenable:', !!(cv && typeof (cv as {then?:unknown}).then === 'function'))
