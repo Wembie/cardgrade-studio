@@ -1,5 +1,5 @@
 const CACHE_NAME = 'cardgrade-studio-v1'
-const CV_CACHE = 'cardgrade-cv-v1'
+const CV_CACHE = 'cardgrade-cv-v2'
 
 // App shell assets to cache on install
 const SHELL_ASSETS = [
@@ -32,8 +32,8 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Cache opencv.js aggressively
-  if (url.href.includes('opencv.js')) {
+  // Cache opencv.js and opencv.wasm aggressively
+  if (url.href.includes('opencv.js') || url.href.includes('opencv.wasm')) {
     event.respondWith(
       caches.open(CV_CACHE).then(async (cache) => {
         const cached = await cache.match(request)
