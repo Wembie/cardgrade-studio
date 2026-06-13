@@ -255,7 +255,8 @@ export function BorderAdjuster({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full overflow-hidden rounded-xl bg-black"
+      className="relative w-full overflow-hidden rounded-xl bg-black"
+      style={{ height: 'min(65vh, 600px)', minHeight: '280px' }}
     >
       <img
         ref={imgRef}
