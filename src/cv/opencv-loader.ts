@@ -164,7 +164,8 @@ export interface CVRotatedRect {
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 
-const OPENCV_URL = '/opencv.js'
+// v=2: WASM extracted to opencv.wasm — busts HTTP cache of old 9.8 MB embedded build
+const OPENCV_URL = '/opencv.js?v=2'
 
 let loadPromise: Promise<CVInstance> | null = null
 

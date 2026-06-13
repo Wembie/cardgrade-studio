@@ -204,19 +204,14 @@ function canvasPerspectiveWarp(
   outW: number,
   outH: number
 ): ImageData {
-  const canvas = new OffscreenCanvas(imageData.width, imageData.height)
-  const ctx = canvas.getContext('2d')!
-  ctx.putImageData(imageData, 0, 0)
+  const src = imageData.data
+  const srcW = imageData.width
+  const out = new Uint8ClampedArray(outW * outH * 4)
 
-  const outCanvas = new OffscreenCanvas(outW, outH)
-  const outCtx = outCanvas.getContext('2d')!
-
-  // Simple bilinear quad-to-rect mapping
   for (let y = 0; y < outH; y++) {
     for (let x = 0; x < outW; x++) {
       const u = x / outW
       const v = y / outH
-      // Bilinear interpolation of source coords
       const srcX =
         corners[0].x * (1 - u) * (1 - v) +
         corners[1].x * u * (1 - v) +
@@ -227,19 +222,14 @@ function canvasPerspectiveWarp(
         corners[1].y * u * (1 - v) +
         corners[3].y * (1 - u) * v +
         corners[2].y * u * v
-
-      const sx = Math.round(srcX)
-      const sy = Math.round(srcY)
-      const i = (sy * imageData.width + sx) * 4
-      const r = imageData.data[i]
-      const g = imageData.data[i + 1]
-      const b = imageData.data[i + 2]
-      const a = imageData.data[i + 3]
-
-      outCtx.fillStyle = `rgba(${r},${g},${b},${a / 255})`
-      outCtx.fillRect(x, y, 1, 1)
+      const si = (Math.round(srcY) * srcW + Math.round(srcX)) * 4
+      const oi = (y * outW + x) * 4
+      out[oi]     = src[si]
+      out[oi + 1] = src[si + 1]
+      out[oi + 2] = src[si + 2]
+      out[oi + 3] = src[si + 3]
     }
   }
 
-  return outCtx.getImageData(0, 0, outW, outH)
+  return new ImageData(out, outW, outH)
 }
