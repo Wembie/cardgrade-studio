@@ -129,10 +129,11 @@ export function BorderAdjuster({
     ctx.stroke(); ctx.setLineDash([])
 
     for (let i = 0; i < 4; i++) {
-      const isActive =
-        (activeRef.current?.quad  === quad && activeRef.current.idx  === i) ||
-        (hoveredRef.current?.quad === quad && hoveredRef.current.idx === i)
-      drawCircleHandle(ctx, pts[i].x, pts[i].y, handle, line, isActive)
+      const isActive  = activeRef.current?.quad  === quad && activeRef.current.idx  === i
+      const isHovered = hoveredRef.current?.quad === quad && hoveredRef.current.idx === i
+      if (isActive || isHovered) {
+        drawCircleHandle(ctx, pts[i].x, pts[i].y, handle, line, isActive)
+      }
     }
   }, [imgToCanvas])
 
