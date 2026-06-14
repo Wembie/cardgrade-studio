@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import type { CardCorners, AnalysisState, AnalysisResult } from '@/shared/types'
 import { warpPerspective } from '@/math/perspective'
-import { analyzeCentering, analyzeCenteringFromCorners } from '@/math/centering'
+import { analyzeCentering, analyzeCenteringFromCorners, getBorderWidthsPx } from '@/math/centering'
 import { analyzeSurface } from '@/math/surface'
 import { analyzeEdges } from '@/math/edges'
 import { analyzeCorners } from '@/math/corners'
@@ -134,9 +134,16 @@ export function useAnalyzer(): UseAnalyzerReturn {
         ? analyzeCenteringFromCorners(outerCorners, innerCorners, OUT_W, OUT_H)
         : analyzeCentering(warped)
 
-      const surface      = analyzeSurface(warped)
-      const edges        = analyzeEdges(warped)
-      const cornerResult = analyzeCorners(warped)
+      const bw = innerCorners
+        ? getBorderWidthsPx(outerCorners, innerCorners, OUT_W, OUT_H)
+        : undefined
+      const avgBorderPx = bw
+        ? (bw.left + bw.right + bw.top + bw.bottom) / 4
+        : undefined
+
+      const surface      = analyzeSurface(warped, avgBorderPx)
+      const edges        = analyzeEdges(warped, bw)
+      const cornerResult = analyzeCorners(warped, avgBorderPx)
       const grades       = estimateGrades(centering, surface, edges, cornerResult)
 
       const [TL, TR, , BL] = outerCorners

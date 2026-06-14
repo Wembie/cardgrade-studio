@@ -148,6 +148,34 @@ function buildCenteringResult(
   }
 }
 
+function projectBorderWidths(
+  outerCorners: CardCorners,
+  innerCorners: CardCorners,
+  warpW: number,
+  warpH: number,
+): { left: number; right: number; top: number; bottom: number } {
+  const [iTL, iTR, iBR, iBL] = projectIntoRect(outerCorners, innerCorners, warpW, warpH)
+  return {
+    left:   Math.max(1, (iTL.x + iBL.x) / 2),
+    right:  Math.max(1, warpW - (iTR.x + iBR.x) / 2),
+    top:    Math.max(1, (iTL.y + iTR.y) / 2),
+    bottom: Math.max(1, warpH - (iBL.y + iBR.y) / 2),
+  }
+}
+
+/**
+ * Return border widths in warped-image pixels for each side.
+ * Use these to drive edge/corner/surface analysis band sizes.
+ */
+export function getBorderWidthsPx(
+  outerCorners: CardCorners,
+  innerCorners: CardCorners,
+  warpW: number,
+  warpH: number,
+): { left: number; right: number; top: number; bottom: number } {
+  return projectBorderWidths(outerCorners, innerCorners, warpW, warpH)
+}
+
 /**
  * Compute centering directly from outer (card edge) and inner (artwork edge)
  * corner positions. More accurate than pixel scanning — no guesswork.
@@ -158,17 +186,8 @@ export function analyzeCenteringFromCorners(
   warpW: number,
   warpH: number,
 ): CenteringResult {
-  const [iTL, iTR, iBR, iBL] = projectIntoRect(outerCorners, innerCorners, warpW, warpH)
-  const leftBorder   = (iTL.x + iBL.x) / 2
-  const rightBorder  = warpW - (iTR.x + iBR.x) / 2
-  const topBorder    = (iTL.y + iTR.y) / 2
-  const bottomBorder = warpH - (iBL.y + iBR.y) / 2
-  return buildCenteringResult(
-    Math.max(0, leftBorder),
-    Math.max(0, rightBorder),
-    Math.max(0, topBorder),
-    Math.max(0, bottomBorder),
-  )
+  const bw = projectBorderWidths(outerCorners, innerCorners, warpW, warpH)
+  return buildCenteringResult(bw.left, bw.right, bw.top, bw.bottom)
 }
 
 export function analyzeCentering(card: ImageData): CenteringResult {

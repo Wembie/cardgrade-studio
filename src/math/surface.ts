@@ -72,23 +72,18 @@ function clamp(v: number, lo: number, hi: number): number {
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function analyzeSurface(card: ImageData): SurfaceResult {
+export function analyzeSurface(card: ImageData, borderPx?: number): SurfaceResult {
   const { width, height, data } = card
 
   const gray = toGrayscale(data, width, height)
   const blurred = gaussianBlur3x3(gray, width, height)
   const sobel = sobelMagnitude(blurred, width, height)
 
-  // Surface quality from a regular photo is inherently approximate — holo
-  // textures, foil effects, and print variation all produce Sobel magnitude
-  // even on a pristine card. Strategy:
-  //   1. Only look at the narrow card-edge strip (4-8%), which is mostly
-  //      the physical border before artwork starts
-  //   2. Use high thresholds — only count truly abnormal spikes
-  //   3. Cap minimum at 60 so holo/textured cards are never wrongly zeroed
   const side = Math.min(width, height)
-  const ringInner = Math.floor(side * 0.04)
-  const ringOuter = Math.floor(side * 0.08)
+  const ringOuter = borderPx
+    ? Math.max(4, Math.min(Math.floor(borderPx), Math.floor(side * 0.12)))
+    : Math.floor(side * 0.08)
+  const ringInner = Math.max(2, Math.floor(ringOuter * 0.5))
 
   // High thresholds — we only want to catch obvious physical damage,
   // not normal card texture or holo shimmer

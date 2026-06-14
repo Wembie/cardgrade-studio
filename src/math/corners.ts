@@ -68,10 +68,13 @@ function sampleCorner(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
-export function analyzeCorners(card: ImageData): CornerResult {
+export function analyzeCorners(card: ImageData, cornerSizePx?: number): CornerResult {
   const { width, height, data } = card
 
-  const cornerSize = Math.max(8, Math.floor(Math.min(width, height) * 0.04))
+  const cap = Math.floor(Math.min(width, height) * 0.10)
+  const cornerSize = cornerSizePx
+    ? Math.max(8, Math.min(Math.floor(cornerSizePx), cap))
+    : Math.max(8, Math.floor(Math.min(width, height) * 0.04))
 
   // Cards have rounded corners — the extreme corner pixels are background (black),
   // not card material. Filter those out before scoring, otherwise every card
