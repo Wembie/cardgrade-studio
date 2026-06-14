@@ -7,35 +7,37 @@ interface BorderAdjusterProps {
   imageUrl: string
   imageDimensions: { width: number; height: number }
   outerCorners: CardCorners
-  innerCorners: CardCorners   // computed — displayed only, not draggable
+  innerCorners: CardCorners
   onOuterChange: (corners: CardCorners) => void
+  onInnerChange: (corners: CardCorners) => void
 }
 
-const HIT_RADIUS   = 18
-const BRACKET_LEN  = 14
-const BRACKET_W    = 2.5
+const HIT_RADIUS   = 16
+const HANDLE_R     = 7
 
-const OUTER_LINE  = 'rgba(99, 102, 241, 0.9)'
-const OUTER_FILL  = 'rgba(99, 102, 241, 0.06)'
-const INNER_LINE  = 'rgba(250, 204, 21, 0.75)'
-const INNER_FILL  = 'rgba(250, 204, 21, 0.04)'
-const ACTIVE_COLOR = '#ffffff'
+const OUTER_LINE   = 'rgba(99, 102, 241, 0.85)'
+const OUTER_FILL   = 'rgba(99, 102, 241, 0.06)'
+const OUTER_HANDLE = '#6366f1'
+const INNER_LINE   = 'rgba(250, 204, 21, 0.85)'
+const INNER_FILL   = 'rgba(250, 204, 21, 0.05)'
+const INNER_HANDLE = '#facc15'
+const ACTIVE_FILL  = '#ffffff'
+const ACTIVE_RING  = '#ffffff'
 
-function drawBracket(
+type ActiveHandle = { quad: 'outer' | 'inner'; idx: number } | null
+
+function drawCircleHandle(
   ctx: CanvasRenderingContext2D,
-  x: number, y: number, idx: number, color: string,
+  x: number, y: number,
+  fill: string, ring: string,
+  active: boolean,
 ) {
-  ctx.strokeStyle = color
-  ctx.lineWidth = BRACKET_W
-  ctx.lineCap = 'square'
   ctx.beginPath()
-  const L = BRACKET_LEN
-  switch (idx) {
-    case 0: ctx.moveTo(x + L, y); ctx.lineTo(x, y); ctx.lineTo(x, y + L); break // TL
-    case 1: ctx.moveTo(x - L, y); ctx.lineTo(x, y); ctx.lineTo(x, y + L); break // TR
-    case 2: ctx.moveTo(x - L, y); ctx.lineTo(x, y); ctx.lineTo(x, y - L); break // BR
-    case 3: ctx.moveTo(x + L, y); ctx.lineTo(x, y); ctx.lineTo(x, y - L); break // BL
-  }
+  ctx.arc(x, y, HANDLE_R, 0, Math.PI * 2)
+  ctx.fillStyle   = active ? ACTIVE_FILL : fill
+  ctx.fill()
+  ctx.strokeStyle = active ? ACTIVE_RING : ring
+  ctx.lineWidth   = 2
   ctx.stroke()
 }
 
@@ -45,6 +47,7 @@ export function BorderAdjuster({
   outerCorners,
   innerCorners,
   onOuterChange,
+  onInnerChange,
 }: BorderAdjusterProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef    = useRef<HTMLCanvasElement>(null)
@@ -53,30 +56,24 @@ export function BorderAdjuster({
     width: number; height: number; offsetX: number; offsetY: number
   } | null>(null)
 
-  const activeRef  = useRef<number>(-1)
-  const hoveredRef = useRef<number>(-1)
+  const activeRef  = useRef<ActiveHandle>(null)
+  const hoveredRef = useRef<ActiveHandle>(null)
   const rafRef     = useRef<number>(0)
   const [isDragging, setIsDragging] = useState(false)
 
   const computeRect = useCallback(() => {
-    const c = containerRef.current
-    if (!c) return null
+    const c = containerRef.current; if (!c) return null
     const cw = c.clientWidth; const ch = c.clientHeight
     if (!cw || !ch) return null
     const { width: iw, height: ih } = imageDimensions
     const scale = Math.min(cw / iw, ch / ih)
-    return {
-      width: iw * scale, height: ih * scale,
-      offsetX: (cw - iw * scale) / 2,
-      offsetY: (ch - ih * scale) / 2,
-    }
+    return { width: iw * scale, height: ih * scale, offsetX: (cw - iw * scale) / 2, offsetY: (ch - ih * scale) / 2 }
   }, [imageDimensions])
 
   useEffect(() => {
     const c = containerRef.current; if (!c) return
     const obs = new ResizeObserver(() => setRenderedSize(computeRect()))
-    obs.observe(c)
-    setRenderedSize(computeRect())
+    obs.observe(c); setRenderedSize(computeRect())
     return () => obs.disconnect()
   }, [computeRect])
 
@@ -96,41 +93,48 @@ export function BorderAdjuster({
     [imageDimensions],
   )
 
+  const drawQuad = useCallback((
+    ctx: CanvasRenderingContext2D,
+    corners: CardCorners,
+    rs: NonNullable<typeof renderedSize>,
+    line: string, fill: string, handle: string,
+    quad: 'outer' | 'inner',
+    dashed: boolean,
+  ) => {
+    const pts = corners.map(c => imgToCanvas(c, rs))
+
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    ctx.closePath()
+    ctx.fillStyle = fill; ctx.fill()
+
+    ctx.beginPath()
+    ctx.moveTo(pts[0].x, pts[0].y)
+    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    ctx.closePath()
+    ctx.strokeStyle = line; ctx.lineWidth = 1.5
+    ctx.setLineDash(dashed ? [5, 4] : [])
+    ctx.stroke(); ctx.setLineDash([])
+
+    for (let i = 0; i < 4; i++) {
+      const isActive =
+        (activeRef.current?.quad  === quad && activeRef.current.idx  === i) ||
+        (hoveredRef.current?.quad === quad && hoveredRef.current.idx === i)
+      drawCircleHandle(ctx, pts[i].x, pts[i].y, handle, line, isActive)
+    }
+  }, [imgToCanvas])
+
   const draw = useCallback(() => {
     const canvas = canvasRef.current; const rs = renderedSize
     if (!canvas || !rs) return
     const ctx = canvas.getContext('2d'); if (!ctx) return
-
-    canvas.width  = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
+    canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight
     ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-    // ── Inner quad (computed, dashed, no handles) ─────────────────────────────
-    const iPts = innerCorners.map(c => imgToCanvas(c, rs))
-    ctx.beginPath()
-    ctx.moveTo(iPts[0].x, iPts[0].y)
-    for (let i = 1; i < 4; i++) ctx.lineTo(iPts[i].x, iPts[i].y)
-    ctx.closePath()
-    ctx.fillStyle = INNER_FILL; ctx.fill()
-    ctx.strokeStyle = INNER_LINE; ctx.lineWidth = 1; ctx.setLineDash([4, 4])
-    ctx.stroke(); ctx.setLineDash([])
-
-    // ── Outer quad (draggable) ─────────────────────────────────────────────────
-    const oPts = outerCorners.map(c => imgToCanvas(c, rs))
-    ctx.beginPath()
-    ctx.moveTo(oPts[0].x, oPts[0].y)
-    for (let i = 1; i < 4; i++) ctx.lineTo(oPts[i].x, oPts[i].y)
-    ctx.closePath()
-    ctx.fillStyle = OUTER_FILL; ctx.fill()
-    ctx.strokeStyle = OUTER_LINE; ctx.lineWidth = 1.5; ctx.setLineDash([])
-    ctx.stroke()
-
-    for (let i = 0; i < 4; i++) {
-      const isActive  = activeRef.current  === i
-      const isHovered = hoveredRef.current === i
-      drawBracket(ctx, oPts[i].x, oPts[i].y, i, isActive || isHovered ? ACTIVE_COLOR : OUTER_LINE)
-    }
-  }, [outerCorners, innerCorners, renderedSize, imgToCanvas])
+    drawQuad(ctx, outerCorners, rs, OUTER_LINE, OUTER_FILL, OUTER_HANDLE, 'outer', false)
+    drawQuad(ctx, innerCorners, rs, INNER_LINE, INNER_FILL, INNER_HANDLE, 'inner', true)
+  }, [outerCorners, innerCorners, renderedSize, drawQuad])
 
   useEffect(() => {
     cancelAnimationFrame(rafRef.current)
@@ -138,15 +142,20 @@ export function BorderAdjuster({
     return () => cancelAnimationFrame(rafRef.current)
   }, [draw])
 
-  const findCorner = useCallback((cx: number, cy: number): number => {
-    if (!renderedSize) return -1
-    const pts = outerCorners.map(c => imgToCanvas(c, renderedSize))
-    for (let i = 0; i < 4; i++) {
-      const dx = pts[i].x - cx; const dy = pts[i].y - cy
-      if (Math.sqrt(dx * dx + dy * dy) <= HIT_RADIUS) return i
+  const findHandle = useCallback((cx: number, cy: number): ActiveHandle => {
+    if (!renderedSize) return null
+    for (const [corners, quad] of [
+      [innerCorners, 'inner'],
+      [outerCorners, 'outer'],
+    ] as const) {
+      const pts = corners.map(c => imgToCanvas(c, renderedSize))
+      for (let i = 0; i < 4; i++) {
+        const dx = pts[i].x - cx; const dy = pts[i].y - cy
+        if (Math.sqrt(dx * dx + dy * dy) <= HIT_RADIUS) return { quad, idx: i }
+      }
     }
-    return -1
-  }, [outerCorners, renderedSize, imgToCanvas])
+    return null
+  }, [outerCorners, innerCorners, renderedSize, imgToCanvas])
 
   const getXY = (e: React.PointerEvent<HTMLCanvasElement>) => {
     const r = canvasRef.current!.getBoundingClientRect()
@@ -155,40 +164,42 @@ export function BorderAdjuster({
 
   const onPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     const { cx, cy } = getXY(e)
-    const idx = findCorner(cx, cy)
-    if (idx === -1) return
-    activeRef.current = idx; setIsDragging(true)
+    const handle = findHandle(cx, cy); if (!handle) return
+    activeRef.current = handle; setIsDragging(true)
     e.currentTarget.setPointerCapture(e.pointerId); e.preventDefault()
-  }, [findCorner])
+  }, [findHandle])
 
   const onPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
     if (!renderedSize) return
     const { cx, cy } = getXY(e)
-    if (activeRef.current !== -1) {
-      const updated = [...outerCorners] as unknown as CardCorners
-      updated[activeRef.current] = canvasToImg(cx, cy, renderedSize)
-      onOuterChange(updated)
+    if (activeRef.current) {
+      const { quad, idx } = activeRef.current
+      const pt = canvasToImg(cx, cy, renderedSize)
+      if (quad === 'outer') {
+        const u = [...outerCorners] as unknown as CardCorners; u[idx] = pt; onOuterChange(u)
+      } else {
+        const u = [...innerCorners] as unknown as CardCorners; u[idx] = pt; onInnerChange(u)
+      }
       cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(draw)
     } else {
-      const prev = hoveredRef.current
-      hoveredRef.current = findCorner(cx, cy)
-      if (prev !== hoveredRef.current) {
+      const prev = hoveredRef.current; hoveredRef.current = findHandle(cx, cy)
+      if (prev?.quad !== hoveredRef.current?.quad || prev?.idx !== hoveredRef.current?.idx) {
         cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(draw)
       }
     }
-  }, [outerCorners, renderedSize, onOuterChange, canvasToImg, findCorner, draw])
+  }, [outerCorners, innerCorners, renderedSize, onOuterChange, onInnerChange, canvasToImg, findHandle, draw])
 
   const onPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (activeRef.current !== -1) {
+    if (activeRef.current) {
       e.currentTarget.releasePointerCapture(e.pointerId)
-      activeRef.current = -1; setIsDragging(false)
+      activeRef.current = null; setIsDragging(false)
       cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(draw)
     }
   }, [draw])
 
   const onPointerLeave = useCallback(() => {
-    if (hoveredRef.current !== -1) {
-      hoveredRef.current = -1
+    if (hoveredRef.current) {
+      hoveredRef.current = null
       cancelAnimationFrame(rafRef.current); rafRef.current = requestAnimationFrame(draw)
     }
   }, [draw])

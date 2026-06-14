@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { CardCorners, AnalysisState, AnalysisResult } from '@/shared/types'
 import { warpPerspective } from '@/math/perspective'
 import { analyzeCentering, analyzeCenteringFromCorners } from '@/math/centering'
@@ -12,16 +12,31 @@ import { estimateGrades } from '@/math/grading'
 const OUT_W = 500
 const OUT_H = 700
 
+function computeInnerCorners(outer: CardCorners, pct: number): CardCorners {
+  const [TL, TR, BR, BL] = outer
+  const cardW = ((TR.x - TL.x) + (BR.x - BL.x)) / 2
+  const cardH = ((BL.y - TL.y) + (BR.y - TR.y)) / 2
+  const ix = cardW * pct / 100
+  const iy = cardH * pct / 100
+  return [
+    { x: TL.x + ix, y: TL.y + iy },
+    { x: TR.x - ix, y: TR.y + iy },
+    { x: BR.x - ix, y: BR.y - iy },
+    { x: BL.x + ix, y: BL.y - iy },
+  ]
+}
+
 export interface UseAnalyzerReturn {
   imageFile: File | null
   imageUrl: string | null
   imageDimensions: { width: number; height: number } | null
   outerCorners: CardCorners | null
-  innerCorners: CardCorners | null  // derived from outerCorners + borderPercent
+  innerCorners: CardCorners | null
   borderPercent: number
   analysisState: AnalysisState
   setImage: (file: File) => void
   setOuterCorners: (corners: CardCorners) => void
+  setInnerCorners: (corners: CardCorners) => void
   setBorderPercent: (pct: number) => void
   analyze: () => Promise<void>
   reset: () => void
@@ -32,28 +47,18 @@ export function useAnalyzer(): UseAnalyzerReturn {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
   const [outerCorners, setOuterCorners] = useState<CardCorners | null>(null)
-  const [borderPercent, setBorderPercent] = useState(8)
+  const [innerCorners, setInnerCorners] = useState<CardCorners | null>(null)
+  const [borderPercent, setBorderPercentRaw] = useState(8)
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: 'idle' })
-
-  // Inner corners are derived — no separate state needed
-  const innerCorners = useMemo((): CardCorners | null => {
-    if (!outerCorners) return null
-    const [TL, TR, BR, BL] = outerCorners
-    const cardW = ((TR.x - TL.x) + (BR.x - BL.x)) / 2
-    const cardH = ((BL.y - TL.y) + (BR.y - TR.y)) / 2
-    const ix = cardW * borderPercent / 100
-    const iy = cardH * borderPercent / 100
-    return [
-      { x: TL.x + ix, y: TL.y + iy },
-      { x: TR.x - ix, y: TR.y + iy },
-      { x: BR.x - ix, y: BR.y - iy },
-      { x: BL.x + ix, y: BL.y - iy },
-    ]
-  }, [outerCorners, borderPercent])
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl) }
   }, [imageUrl])
+
+  const setBorderPercent = useCallback((pct: number) => {
+    setBorderPercentRaw(pct)
+    if (outerCorners) setInnerCorners(computeInnerCorners(outerCorners, pct))
+  }, [outerCorners])
 
   const setImage = useCallback((file: File) => {
     setImageUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null })
@@ -72,12 +77,14 @@ export function useAnalyzer(): UseAnalyzerReturn {
 
       // Outer corners at 5% inset — assumes photo has a small background margin
       const ox = w * 0.05, oy = h * 0.05
-      setOuterCorners([
+      const outer: CardCorners = [
         { x: ox,     y: oy },
         { x: w - ox, y: oy },
         { x: w - ox, y: h - oy },
         { x: ox,     y: h - oy },
-      ])
+      ]
+      setOuterCorners(outer)
+      setInnerCorners(computeInnerCorners(outer, 8))
     }
 
     img.onerror = () => {
@@ -161,7 +168,8 @@ export function useAnalyzer(): UseAnalyzerReturn {
     setImageUrl(null)
     setImageDimensions(null)
     setOuterCorners(null)
-    setBorderPercent(8)
+    setInnerCorners(null)
+    setBorderPercentRaw(8)
     setAnalysisState({ status: 'idle' })
   }, [imageUrl])
 
@@ -172,6 +180,7 @@ export function useAnalyzer(): UseAnalyzerReturn {
     analysisState,
     setImage,
     setOuterCorners,
+    setInnerCorners,
     setBorderPercent,
     analyze,
     reset,

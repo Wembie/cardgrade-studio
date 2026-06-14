@@ -135,6 +135,7 @@ export default function AnalyzePage() {
     analysisState,
     setImage,
     setOuterCorners,
+    setInnerCorners,
     setBorderPercent,
     analyze,
     reset,
@@ -193,6 +194,7 @@ export default function AnalyzePage() {
                   outerCorners={outerCorners!}
                   innerCorners={innerCorners!}
                   onOuterChange={setOuterCorners}
+                  onInnerChange={setInnerCorners}
                 />
 
                 {/* Border width slider */}
