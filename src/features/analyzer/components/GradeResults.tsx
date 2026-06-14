@@ -54,6 +54,12 @@ const COMPANIES = [
     bg: 'bg-emerald-800',
     text: 'text-white',
   },
+  {
+    key: 'tag' as const,
+    name: 'TAG',
+    bg: 'bg-violet-700',
+    text: 'text-white',
+  },
 ]
 
 // ── Sub-component: single company grade card ──────────────────────────────────
@@ -229,9 +235,9 @@ export function GradeResults({ result }: GradeResultsProps) {
 
   return (
     <div className="space-y-5">
-      {/* ── 2×2 grade grid ── */}
+      {/* ── Grade grid: 2×2 + TAG spanning full width ── */}
       <div className="grid grid-cols-2 gap-3">
-        {COMPANIES.map((c, i) => (
+        {COMPANIES.slice(0, 4).map((c, i) => (
           <CompanyGradeCard
             key={c.key}
             name={c.name}
@@ -242,6 +248,14 @@ export function GradeResults({ result }: GradeResultsProps) {
           />
         ))}
       </div>
+      <CompanyGradeCard
+        key="tag"
+        name="TAG"
+        bg="bg-violet-700"
+        text="text-white"
+        gradeResult={grades.tag}
+        delay={4 * 0.07}
+      />
 
       {/* ── Warped card preview ── */}
       <motion.div

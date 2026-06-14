@@ -76,17 +76,29 @@ export function analyzeEdges(card: ImageData): EdgeResult {
   const topValues    = collectEdgeBand(data, width, height, 'top',    bandWidth)
   const bottomValues = collectEdgeBand(data, width, height, 'bottom', bandWidth)
 
-  // Score = how free the edge is from dark outlier pixels (chips/dings).
-  // stdDev alone penalizes colored borders — use outlier rate instead.
+  // Score = how free the edge is from defect pixels.
+  // First checks for uniform border (histogram peak). Full-art cards with no
+  // visible border have a flat histogram — artwork bleed, can't measure wear.
   function chipScore(values: number[]): number {
     if (values.length === 0) return 100
+
+    // Histogram peak detection: uniform borders (white, yellow, black) cluster
+    // in a narrow brightness range; artwork spreads across all buckets.
+    const BUCKET = 40
+    const buckets = new Array(Math.ceil(256 / BUCKET)).fill(0)
+    for (const v of values) buckets[Math.min(buckets.length - 1, Math.floor(v / BUCKET))]++
+    const maxBucket = Math.max(...buckets)
+    // No strong peak → artwork in edge band → can't measure → return NM-MT floor
+    if (maxBucket / values.length < 0.30) return 78
+
     const sorted = [...values].sort((a, b) => a - b)
-    // Use median as reference (robust against outliers)
     const median = sorted[Math.floor(sorted.length / 2)]
-    const chipThreshold = median - 45
-    const chips = values.filter(v => v < chipThreshold).length
+    // Bidirectional: dark chips on light borders + bright whitening on dark borders
+    const lo = median * 0.75
+    const hi = Math.min(255, median + 60)
+    const chips = values.filter(v => v < lo || v > hi).length
     const chipRate = chips / values.length
-    return clamp(100 - chipRate * 600, 0, 100)
+    return clamp(100 - chipRate * 500, 0, 100)
   }
 
   const leftScore   = chipScore(leftValues)

@@ -120,11 +120,11 @@ export function analyzeSurface(card: ImageData): SurfaceResult {
 
   const score = clamp(
     100 - defectDensity * 120 - (highDefectPixels / safeTotal) * 80,
-    60,   // min 60 — surface from a photo can't reliably score below this
+    78,   // floor at NM-MT — holo/complex borders produce Sobel even on pristine cards
     100,
   )
 
-  const scratchScore = clamp(100 - defectDensity * 180, 60, 100)
+  const scratchScore = clamp(100 - defectDensity * 180, 78, 100)
 
   return {
     score,
