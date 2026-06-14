@@ -131,10 +131,11 @@ export default function AnalyzePage() {
     imageDimensions,
     outerCorners,
     innerCorners,
+    borderPercent,
     analysisState,
     setImage,
     setOuterCorners,
-    setInnerCorners,
+    setBorderPercent,
     analyze,
     reset,
   } = useAnalyzer()
@@ -192,13 +193,27 @@ export default function AnalyzePage() {
                   outerCorners={outerCorners!}
                   innerCorners={innerCorners!}
                   onOuterChange={setOuterCorners}
-                  onInnerChange={setInnerCorners}
                 />
+
+                {/* Border width slider */}
+                <div className="flex items-center gap-3 px-1">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Border</span>
+                  <input
+                    type="range"
+                    min={2}
+                    max={22}
+                    step={1}
+                    value={borderPercent}
+                    onChange={e => setBorderPercent(Number(e.target.value))}
+                    className="flex-1 h-1.5 accent-yellow-400 cursor-pointer"
+                  />
+                  <span className="text-xs text-yellow-400 font-mono w-8 text-right">{borderPercent}%</span>
+                </div>
 
                 <LevelIndicator corners={outerCorners} />
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Drag the corner handles to match your card&apos;s exact edges
+                  Drag corners to card edges · adjust border % to match the card frame
                 </p>
 
                 <div className="flex justify-center">

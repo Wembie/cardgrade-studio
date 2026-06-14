@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import type { CardCorners, AnalysisState, AnalysisResult } from '@/shared/types'
 import { warpPerspective } from '@/math/perspective'
 import { analyzeCentering, analyzeCenteringFromCorners } from '@/math/centering'
@@ -17,11 +17,12 @@ export interface UseAnalyzerReturn {
   imageUrl: string | null
   imageDimensions: { width: number; height: number } | null
   outerCorners: CardCorners | null
-  innerCorners: CardCorners | null
+  innerCorners: CardCorners | null  // derived from outerCorners + borderPercent
+  borderPercent: number
   analysisState: AnalysisState
   setImage: (file: File) => void
   setOuterCorners: (corners: CardCorners) => void
-  setInnerCorners: (corners: CardCorners) => void
+  setBorderPercent: (pct: number) => void
   analyze: () => Promise<void>
   reset: () => void
 }
@@ -31,8 +32,24 @@ export function useAnalyzer(): UseAnalyzerReturn {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
   const [outerCorners, setOuterCorners] = useState<CardCorners | null>(null)
-  const [innerCorners, setInnerCorners] = useState<CardCorners | null>(null)
+  const [borderPercent, setBorderPercent] = useState(8)
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: 'idle' })
+
+  // Inner corners are derived — no separate state needed
+  const innerCorners = useMemo((): CardCorners | null => {
+    if (!outerCorners) return null
+    const [TL, TR, BR, BL] = outerCorners
+    const cardW = ((TR.x - TL.x) + (BR.x - BL.x)) / 2
+    const cardH = ((BL.y - TL.y) + (BR.y - TR.y)) / 2
+    const ix = cardW * borderPercent / 100
+    const iy = cardH * borderPercent / 100
+    return [
+      { x: TL.x + ix, y: TL.y + iy },
+      { x: TR.x - ix, y: TR.y + iy },
+      { x: BR.x - ix, y: BR.y - iy },
+      { x: BL.x + ix, y: BL.y - iy },
+    ]
+  }, [outerCorners, borderPercent])
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl) }
@@ -53,22 +70,13 @@ export function useAnalyzer(): UseAnalyzerReturn {
       setImageDimensions({ width: w, height: h })
       setAnalysisState({ status: 'idle' })
 
-      // Outer = card physical edges (5% inset for typical photo with small margin)
+      // Outer corners at 5% inset — assumes photo has a small background margin
       const ox = w * 0.05, oy = h * 0.05
       setOuterCorners([
         { x: ox,     y: oy },
         { x: w - ox, y: oy },
         { x: w - ox, y: h - oy },
         { x: ox,     y: h - oy },
-      ])
-
-      // Inner = artwork boundary (20% inset — typical card border width)
-      const ix = w * 0.20, iy = h * 0.20
-      setInnerCorners([
-        { x: ix,     y: iy },
-        { x: w - ix, y: iy },
-        { x: w - ix, y: h - iy },
-        { x: ix,     y: h - iy },
       ])
     }
 
@@ -153,17 +161,18 @@ export function useAnalyzer(): UseAnalyzerReturn {
     setImageUrl(null)
     setImageDimensions(null)
     setOuterCorners(null)
-    setInnerCorners(null)
+    setBorderPercent(8)
     setAnalysisState({ status: 'idle' })
   }, [imageUrl])
 
   return {
     imageFile, imageUrl, imageDimensions,
     outerCorners, innerCorners,
+    borderPercent,
     analysisState,
     setImage,
     setOuterCorners,
-    setInnerCorners,
+    setBorderPercent,
     analyze,
     reset,
   }
