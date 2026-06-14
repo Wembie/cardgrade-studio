@@ -65,22 +65,34 @@ function collectEdgeBand(
 export function analyzeEdges(card: ImageData): EdgeResult {
   const { width, height, data } = card
 
-  const bandWidth = Math.max(3, Math.floor(Math.min(width, height) * 0.025))
+  // Narrow band — only the physical card edge pixels (very outermost strip).
+  // Colored card borders (Pokemon yellow, etc.) have high natural variance when
+  // sampled across the full band height; using a very narrow strip and chip-based
+  // detection instead of raw stdDev gives fair scores for colored borders.
+  const bandWidth = Math.max(2, Math.floor(Math.min(width, height) * 0.012))
 
-  const leftValues = collectEdgeBand(data, width, height, 'left', bandWidth)
-  const rightValues = collectEdgeBand(data, width, height, 'right', bandWidth)
-  const topValues = collectEdgeBand(data, width, height, 'top', bandWidth)
+  const leftValues   = collectEdgeBand(data, width, height, 'left',   bandWidth)
+  const rightValues  = collectEdgeBand(data, width, height, 'right',  bandWidth)
+  const topValues    = collectEdgeBand(data, width, height, 'top',    bandWidth)
   const bottomValues = collectEdgeBand(data, width, height, 'bottom', bandWidth)
 
-  const leftStd = stdDev(leftValues)
-  const rightStd = stdDev(rightValues)
-  const topStd = stdDev(topValues)
-  const bottomStd = stdDev(bottomValues)
+  // Score = how free the edge is from dark outlier pixels (chips/dings).
+  // stdDev alone penalizes colored borders — use outlier rate instead.
+  function chipScore(values: number[]): number {
+    if (values.length === 0) return 100
+    const sorted = [...values].sort((a, b) => a - b)
+    // Use median as reference (robust against outliers)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    const chipThreshold = median - 45
+    const chips = values.filter(v => v < chipThreshold).length
+    const chipRate = chips / values.length
+    return clamp(100 - chipRate * 600, 0, 100)
+  }
 
-  const leftScore = clamp(100 - leftStd * 1.8, 0, 100)
-  const rightScore = clamp(100 - rightStd * 1.8, 0, 100)
-  const topScore = clamp(100 - topStd * 1.8, 0, 100)
-  const bottomScore = clamp(100 - bottomStd * 1.8, 0, 100)
+  const leftScore   = chipScore(leftValues)
+  const rightScore  = chipScore(rightValues)
+  const topScore    = chipScore(topValues)
+  const bottomScore = chipScore(bottomValues)
 
   const scores: [number, number, number, number] = [leftScore, rightScore, topScore, bottomScore]
   const avgScore = (leftScore + rightScore + topScore + bottomScore) / 4

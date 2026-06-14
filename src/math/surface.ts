@@ -79,23 +79,34 @@ export function analyzeSurface(card: ImageData): SurfaceResult {
   const blurred = gaussianBlur3x3(gray, width, height)
   const sobel = sobelMagnitude(blurred, width, height)
 
-  // Exclude outer 8% margin
-  const marginX = Math.floor(width * 0.08)
-  const marginY = Math.floor(height * 0.08)
+  // Analyze ONLY the card border ring — NOT the artwork interior.
+  // Artwork complexity creates high Sobel everywhere and is not surface damage.
+  // The physical card border (colored or white frame) should be smooth; scratches
+  // show as Sobel spikes in this region.
+  const side = Math.min(width, height)
+  const ringInner = Math.floor(side * 0.03)  // skip very edge (warp artifacts)
+  const ringOuter = Math.floor(side * 0.11)  // stay within card border, before artwork
 
-  const SCRATCH_THRESHOLD = 60
-  const HIGH_THRESHOLD = 120
+  const SCRATCH_THRESHOLD = 45   // gentler than artwork threshold
+  const HIGH_THRESHOLD    = 90
 
   let totalPixels = 0
   let scratchPixels = 0
   let highDefectPixels = 0
 
-  for (let y = marginY; y < height - marginY; y++) {
-    for (let x = marginX; x < width - marginX; x++) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inRing =
+        (x >= ringInner && x < ringOuter) ||
+        (x >= width  - ringOuter && x < width  - ringInner) ||
+        (y >= ringInner && y < ringOuter) ||
+        (y >= height - ringOuter && y < height - ringInner)
+      if (!inRing) continue
+
       const mag = sobel[y * width + x]
       totalPixels++
       if (mag > SCRATCH_THRESHOLD) scratchPixels++
-      if (mag > HIGH_THRESHOLD) highDefectPixels++
+      if (mag > HIGH_THRESHOLD)    highDefectPixels++
     }
   }
 
@@ -103,12 +114,12 @@ export function analyzeSurface(card: ImageData): SurfaceResult {
   const defectDensity = scratchPixels / safeTotal
 
   const score = clamp(
-    100 - defectDensity * 600 - (highDefectPixels / safeTotal) * 300,
+    100 - defectDensity * 180 - (highDefectPixels / safeTotal) * 120,
     0,
     100,
   )
 
-  const scratchScore = clamp(100 - defectDensity * 900, 0, 100)
+  const scratchScore = clamp(100 - defectDensity * 260, 0, 100)
 
   return {
     score,

@@ -73,11 +73,18 @@ export function analyzeCorners(card: ImageData): CornerResult {
 
   const cornerSize = Math.max(8, Math.floor(Math.min(width, height) * 0.04))
 
+  // Score based on dark-outlier rate (worn/dinged corners = darker pixels at
+  // the extreme corner vs. the surrounding card border color).
   const corners: Array<'TL' | 'TR' | 'BR' | 'BL'> = ['TL', 'TR', 'BR', 'BL']
   const scores = corners.map(corner => {
     const values = sampleCorner(data, width, height, corner, cornerSize)
-    const sd = stdDev(values)
-    return clamp(100 - sd * 1.4, 0, 100)
+    if (values.length === 0) return 100
+    const sorted = [...values].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+    const chipThreshold = median - 40
+    const chips = values.filter(v => v < chipThreshold).length
+    const chipRate = chips / values.length
+    return clamp(100 - chipRate * 500, 0, 100)
   }) as [number, number, number, number]
 
   const avgScore = scores.reduce((a, b) => a + b, 0) / 4
