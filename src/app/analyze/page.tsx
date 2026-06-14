@@ -75,13 +75,20 @@ function RightPanelContent({
         <div className="p-4 flex-1">
           <GradeResults result={analysisState.result} />
         </div>
-        <div className="p-4 border-t border-border flex-shrink-0">
+        <div className="p-4 border-t border-border flex-shrink-0 flex gap-2">
+          <button
+            onClick={onAnalyze}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Re-analyze
+          </button>
           <button
             onClick={onReset}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border bg-secondary text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border bg-secondary text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+            title="Analyze another card"
           >
             <RotateCcw className="w-4 h-4" />
-            Analyze Another
           </button>
         </div>
       </div>
