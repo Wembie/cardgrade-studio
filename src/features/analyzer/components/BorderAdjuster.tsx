@@ -26,6 +26,11 @@ const ACTIVE_RING  = '#ffffff'
 
 type ActiveHandle = { quad: 'outer' | 'inner'; idx: number } | null
 
+function normalizeVec(v: { x: number; y: number }): { x: number; y: number } {
+  const len = Math.sqrt(v.x * v.x + v.y * v.y)
+  return len === 0 ? { x: 0, y: 0 } : { x: v.x / len, y: v.y / len }
+}
+
 function drawCircleHandle(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -102,17 +107,23 @@ export function BorderAdjuster({
     dashed: boolean,
   ) => {
     const pts = corners.map(c => imgToCanvas(c, rs))
+    const r = Math.min(rs.width, rs.height) * 0.04
 
     ctx.beginPath()
-    ctx.moveTo(pts[0].x, pts[0].y)
-    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y)
+    for (let i = 0; i < 4; i++) {
+      const A     = pts[i]
+      const P     = pts[(i + 3) % 4]
+      const B     = pts[(i + 1) % 4]
+      const dPrev = normalizeVec({ x: P.x - A.x, y: P.y - A.y })
+      const dNext = normalizeVec({ x: B.x - A.x, y: B.y - A.y })
+      const entry = { x: A.x + dPrev.x * r, y: A.y + dPrev.y * r }
+      const exit  = { x: A.x + dNext.x * r, y: A.y + dNext.y * r }
+      if (i === 0) ctx.moveTo(entry.x, entry.y)
+      else ctx.lineTo(entry.x, entry.y)
+      ctx.arcTo(A.x, A.y, exit.x, exit.y, r)
+    }
     ctx.closePath()
     ctx.fillStyle = fill; ctx.fill()
-
-    ctx.beginPath()
-    ctx.moveTo(pts[0].x, pts[0].y)
-    for (let i = 1; i < 4; i++) ctx.lineTo(pts[i].x, pts[i].y)
-    ctx.closePath()
     ctx.strokeStyle = line; ctx.lineWidth = 1.5
     ctx.setLineDash(dashed ? [5, 4] : [])
     ctx.stroke(); ctx.setLineDash([])
