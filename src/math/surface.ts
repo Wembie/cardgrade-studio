@@ -79,23 +79,39 @@ export function analyzeSurface(card: ImageData): SurfaceResult {
   const blurred = gaussianBlur3x3(gray, width, height)
   const sobel = sobelMagnitude(blurred, width, height)
 
-  // Exclude outer 8% margin
-  const marginX = Math.floor(width * 0.08)
-  const marginY = Math.floor(height * 0.08)
+  // Surface quality from a regular photo is inherently approximate — holo
+  // textures, foil effects, and print variation all produce Sobel magnitude
+  // even on a pristine card. Strategy:
+  //   1. Only look at the narrow card-edge strip (4-8%), which is mostly
+  //      the physical border before artwork starts
+  //   2. Use high thresholds — only count truly abnormal spikes
+  //   3. Cap minimum at 60 so holo/textured cards are never wrongly zeroed
+  const side = Math.min(width, height)
+  const ringInner = Math.floor(side * 0.04)
+  const ringOuter = Math.floor(side * 0.08)
 
-  const SCRATCH_THRESHOLD = 60
-  const HIGH_THRESHOLD = 120
+  // High thresholds — we only want to catch obvious physical damage,
+  // not normal card texture or holo shimmer
+  const SCRATCH_THRESHOLD = 90
+  const HIGH_THRESHOLD    = 160
 
   let totalPixels = 0
   let scratchPixels = 0
   let highDefectPixels = 0
 
-  for (let y = marginY; y < height - marginY; y++) {
-    for (let x = marginX; x < width - marginX; x++) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inRing =
+        (x >= ringInner && x < ringOuter) ||
+        (x >= width  - ringOuter && x < width  - ringInner) ||
+        (y >= ringInner && y < ringOuter) ||
+        (y >= height - ringOuter && y < height - ringInner)
+      if (!inRing) continue
+
       const mag = sobel[y * width + x]
       totalPixels++
       if (mag > SCRATCH_THRESHOLD) scratchPixels++
-      if (mag > HIGH_THRESHOLD) highDefectPixels++
+      if (mag > HIGH_THRESHOLD)    highDefectPixels++
     }
   }
 
@@ -103,12 +119,12 @@ export function analyzeSurface(card: ImageData): SurfaceResult {
   const defectDensity = scratchPixels / safeTotal
 
   const score = clamp(
-    100 - defectDensity * 600 - (highDefectPixels / safeTotal) * 300,
-    0,
+    100 - defectDensity * 120 - (highDefectPixels / safeTotal) * 80,
+    60,   // min 60 — surface from a photo can't reliably score below this
     100,
   )
 
-  const scratchScore = clamp(100 - defectDensity * 900, 0, 100)
+  const scratchScore = clamp(100 - defectDensity * 180, 60, 100)
 
   return {
     score,

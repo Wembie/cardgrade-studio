@@ -73,11 +73,29 @@ export function analyzeCorners(card: ImageData): CornerResult {
 
   const cornerSize = Math.max(8, Math.floor(Math.min(width, height) * 0.04))
 
+  // Cards have rounded corners — the extreme corner pixels are background (black),
+  // not card material. Filter those out before scoring, otherwise every card
+  // gets penalized for its own rounded corners.
+  // After filtering, score based on whitening: worn corners expose white card
+  // stock, making the corner brighter than the surrounding border color.
   const corners: Array<'TL' | 'TR' | 'BR' | 'BL'> = ['TL', 'TR', 'BR', 'BL']
   const scores = corners.map(corner => {
     const values = sampleCorner(data, width, height, corner, cornerSize)
-    const sd = stdDev(values)
-    return clamp(100 - sd * 1.4, 0, 100)
+    if (values.length === 0) return 100
+
+    // Only consider card-material pixels (not dark background from rounded corners)
+    const cardPixels = values.filter(v => v > 30)
+    if (cardPixels.length < 4) return 85  // mostly background = small corner, assume OK
+
+    const sorted = [...cardPixels].sort((a, b) => a - b)
+    const median = sorted[Math.floor(sorted.length / 2)]
+
+    // Worn corners show as dark outliers in the card-material pixels
+    // (bending/chipping pulls card stock → darker than normal border color)
+    const chipThreshold = median - 45
+    const chips = cardPixels.filter(v => v < chipThreshold).length
+    const chipRate = chips / cardPixels.length
+    return clamp(100 - chipRate * 400, 0, 100)
   }) as [number, number, number, number]
 
   const avgScore = scores.reduce((a, b) => a + b, 0) / 4

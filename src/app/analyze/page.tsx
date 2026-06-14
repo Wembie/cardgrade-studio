@@ -75,13 +75,20 @@ function RightPanelContent({
         <div className="p-4 flex-1">
           <GradeResults result={analysisState.result} />
         </div>
-        <div className="p-4 border-t border-border flex-shrink-0">
+        <div className="p-4 border-t border-border flex-shrink-0 flex gap-2">
+          <button
+            onClick={onAnalyze}
+            className="flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+            Re-analyze
+          </button>
           <button
             onClick={onReset}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg border border-border bg-secondary text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+            className="flex items-center justify-center gap-2 px-3 py-2 rounded-lg border border-border bg-secondary text-sm font-medium text-foreground hover:bg-secondary/80 transition-colors"
+            title="Analyze another card"
           >
             <RotateCcw className="w-4 h-4" />
-            Analyze Another
           </button>
         </div>
       </div>
@@ -124,10 +131,12 @@ export default function AnalyzePage() {
     imageDimensions,
     outerCorners,
     innerCorners,
+    borderPercent,
     analysisState,
     setImage,
     setOuterCorners,
     setInnerCorners,
+    setBorderPercent,
     analyze,
     reset,
   } = useAnalyzer()
@@ -188,10 +197,25 @@ export default function AnalyzePage() {
                   onInnerChange={setInnerCorners}
                 />
 
+                {/* Border width slider */}
+                <div className="flex items-center gap-3 px-1">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">Border</span>
+                  <input
+                    type="range"
+                    min={2}
+                    max={22}
+                    step={1}
+                    value={borderPercent}
+                    onChange={e => setBorderPercent(Number(e.target.value))}
+                    className="flex-1 h-1.5 accent-yellow-400 cursor-pointer"
+                  />
+                  <span className="text-xs text-yellow-400 font-mono w-8 text-right">{borderPercent}%</span>
+                </div>
+
                 <LevelIndicator corners={outerCorners} />
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Drag the corner handles to match your card&apos;s exact edges
+                  Drag corners to card edges · adjust border % to match the card frame
                 </p>
 
                 <div className="flex justify-center">

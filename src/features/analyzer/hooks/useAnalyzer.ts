@@ -12,16 +12,32 @@ import { estimateGrades } from '@/math/grading'
 const OUT_W = 500
 const OUT_H = 700
 
+function computeInnerCorners(outer: CardCorners, pct: number): CardCorners {
+  const [TL, TR, BR, BL] = outer
+  const cardW = ((TR.x - TL.x) + (BR.x - BL.x)) / 2
+  const cardH = ((BL.y - TL.y) + (BR.y - TR.y)) / 2
+  const ix = cardW * pct / 100
+  const iy = cardH * pct / 100
+  return [
+    { x: TL.x + ix, y: TL.y + iy },
+    { x: TR.x - ix, y: TR.y + iy },
+    { x: BR.x - ix, y: BR.y - iy },
+    { x: BL.x + ix, y: BL.y - iy },
+  ]
+}
+
 export interface UseAnalyzerReturn {
   imageFile: File | null
   imageUrl: string | null
   imageDimensions: { width: number; height: number } | null
   outerCorners: CardCorners | null
   innerCorners: CardCorners | null
+  borderPercent: number
   analysisState: AnalysisState
   setImage: (file: File) => void
   setOuterCorners: (corners: CardCorners) => void
   setInnerCorners: (corners: CardCorners) => void
+  setBorderPercent: (pct: number) => void
   analyze: () => Promise<void>
   reset: () => void
 }
@@ -32,11 +48,17 @@ export function useAnalyzer(): UseAnalyzerReturn {
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
   const [outerCorners, setOuterCorners] = useState<CardCorners | null>(null)
   const [innerCorners, setInnerCorners] = useState<CardCorners | null>(null)
+  const [borderPercent, setBorderPercentRaw] = useState(8)
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: 'idle' })
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl) }
   }, [imageUrl])
+
+  const setBorderPercent = useCallback((pct: number) => {
+    setBorderPercentRaw(pct)
+    if (outerCorners) setInnerCorners(computeInnerCorners(outerCorners, pct))
+  }, [outerCorners])
 
   const setImage = useCallback((file: File) => {
     setImageUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null })
@@ -53,23 +75,16 @@ export function useAnalyzer(): UseAnalyzerReturn {
       setImageDimensions({ width: w, height: h })
       setAnalysisState({ status: 'idle' })
 
-      // Outer = card physical edges (5% inset for typical photo with small margin)
+      // Outer corners at 5% inset — assumes photo has a small background margin
       const ox = w * 0.05, oy = h * 0.05
-      setOuterCorners([
+      const outer: CardCorners = [
         { x: ox,     y: oy },
         { x: w - ox, y: oy },
         { x: w - ox, y: h - oy },
         { x: ox,     y: h - oy },
-      ])
-
-      // Inner = artwork boundary (20% inset — typical card border width)
-      const ix = w * 0.20, iy = h * 0.20
-      setInnerCorners([
-        { x: ix,     y: iy },
-        { x: w - ix, y: iy },
-        { x: w - ix, y: h - iy },
-        { x: ix,     y: h - iy },
-      ])
+      ]
+      setOuterCorners(outer)
+      setInnerCorners(computeInnerCorners(outer, 8))
     }
 
     img.onerror = () => {
@@ -154,16 +169,19 @@ export function useAnalyzer(): UseAnalyzerReturn {
     setImageDimensions(null)
     setOuterCorners(null)
     setInnerCorners(null)
+    setBorderPercentRaw(8)
     setAnalysisState({ status: 'idle' })
   }, [imageUrl])
 
   return {
     imageFile, imageUrl, imageDimensions,
     outerCorners, innerCorners,
+    borderPercent,
     analysisState,
     setImage,
     setOuterCorners,
     setInnerCorners,
+    setBorderPercent,
     analyze,
     reset,
   }
