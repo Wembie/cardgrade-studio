@@ -1,4 +1,5 @@
-import type { CenteringResult } from '@/shared/types'
+import type { CardCorners, CenteringResult } from '@/shared/types'
+import { projectIntoRect } from './perspective'
 
 // ── Grayscale conversion ──────────────────────────────────────────────────────
 
@@ -119,6 +120,57 @@ function measureEdge(
 
 // ── Public API ────────────────────────────────────────────────────────────────
 
+function buildCenteringResult(
+  leftBorder: number,
+  rightBorder: number,
+  topBorder: number,
+  bottomBorder: number,
+): CenteringResult {
+  const lrMin = Math.max(1, Math.min(leftBorder, rightBorder))
+  const lrMax = Math.max(leftBorder, rightBorder)
+  const tbMin = Math.max(1, Math.min(topBorder, bottomBorder))
+  const tbMax = Math.max(topBorder, bottomBorder)
+  const lrTotal = leftBorder + rightBorder
+  const tbTotal = topBorder + bottomBorder
+  return {
+    leftBorder,
+    rightBorder,
+    topBorder,
+    bottomBorder,
+    lrRatio: lrMax / lrMin,
+    tbRatio: tbMax / tbMin,
+    lrPercent: lrTotal > 0
+      ? [Math.round(leftBorder / lrTotal * 100), Math.round(rightBorder / lrTotal * 100)]
+      : [50, 50],
+    tbPercent: tbTotal > 0
+      ? [Math.round(topBorder / tbTotal * 100), Math.round(bottomBorder / tbTotal * 100)]
+      : [50, 50],
+  }
+}
+
+/**
+ * Compute centering directly from outer (card edge) and inner (artwork edge)
+ * corner positions. More accurate than pixel scanning — no guesswork.
+ */
+export function analyzeCenteringFromCorners(
+  outerCorners: CardCorners,
+  innerCorners: CardCorners,
+  warpW: number,
+  warpH: number,
+): CenteringResult {
+  const [iTL, iTR, iBR, iBL] = projectIntoRect(outerCorners, innerCorners, warpW, warpH)
+  const leftBorder   = (iTL.x + iBL.x) / 2
+  const rightBorder  = warpW - (iTR.x + iBR.x) / 2
+  const topBorder    = (iTL.y + iTR.y) / 2
+  const bottomBorder = warpH - (iBL.y + iBR.y) / 2
+  return buildCenteringResult(
+    Math.max(0, leftBorder),
+    Math.max(0, rightBorder),
+    Math.max(0, topBorder),
+    Math.max(0, bottomBorder),
+  )
+}
+
 export function analyzeCentering(card: ImageData): CenteringResult {
   const { width, height, data } = card
   const gray = toGrayscale(data, width, height)
@@ -159,14 +211,5 @@ export function analyzeCentering(card: ImageData): CenteringResult {
         ]
       : [50, 50]
 
-  return {
-    leftBorder,
-    rightBorder,
-    topBorder,
-    bottomBorder,
-    lrRatio,
-    tbRatio,
-    lrPercent,
-    tbPercent,
-  }
+  return buildCenteringResult(leftBorder, rightBorder, topBorder, bottomBorder)
 }

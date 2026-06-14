@@ -130,6 +130,28 @@ function bilinearSample(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Project a set of points from the same coordinate space as `outer` into a
+ * normalized rectangle of size outW × outH, using the homography defined by
+ * outer → rect. Used to map inner (artwork) corners into warped card space
+ * for direct centering measurement.
+ */
+export function projectIntoRect(
+  outer: CardCorners,
+  points: CardCorners,
+  outW: number,
+  outH: number,
+): CardCorners {
+  const rect: CardCorners = [
+    { x: 0, y: 0 },
+    { x: outW - 1, y: 0 },
+    { x: outW - 1, y: outH - 1 },
+    { x: 0, y: outH - 1 },
+  ]
+  const h = computeHomography(outer, rect)
+  return points.map(pt => applyHomography(h, pt.x, pt.y)) as CardCorners
+}
+
+/**
  * Perspective-warp a card from arbitrary quadrilateral corners to a
  * rectangular output image of size outW x outH.
  *

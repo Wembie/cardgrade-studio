@@ -122,16 +122,18 @@ export default function AnalyzePage() {
     imageFile,
     imageUrl,
     imageDimensions,
-    corners,
+    outerCorners,
+    innerCorners,
     analysisState,
     setImage,
-    setCorners,
+    setOuterCorners,
+    setInnerCorners,
     analyze,
     reset,
   } = useAnalyzer()
 
   const hasImage = !!imageFile && !!imageUrl
-  const hasCorners = !!corners
+  const hasCorners = !!outerCorners && !!innerCorners
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -180,11 +182,13 @@ export default function AnalyzePage() {
                 <BorderAdjuster
                   imageUrl={imageUrl!}
                   imageDimensions={imageDimensions!}
-                  corners={corners!}
-                  onCornersChange={setCorners}
+                  outerCorners={outerCorners!}
+                  innerCorners={innerCorners!}
+                  onOuterChange={setOuterCorners}
+                  onInnerChange={setInnerCorners}
                 />
 
-                <LevelIndicator corners={corners} />
+                <LevelIndicator corners={outerCorners} />
 
                 <p className="text-xs text-muted-foreground text-center">
                   Drag the corner handles to match your card&apos;s exact edges

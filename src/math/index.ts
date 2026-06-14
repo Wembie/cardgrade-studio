@@ -1,5 +1,5 @@
-export { warpPerspective } from './perspective'
-export { analyzeCentering } from './centering'
+export { warpPerspective, projectIntoRect } from './perspective'
+export { analyzeCentering, analyzeCenteringFromCorners } from './centering'
 export { analyzeSurface } from './surface'
 export { analyzeEdges } from './edges'
 export { analyzeCorners } from './corners'
