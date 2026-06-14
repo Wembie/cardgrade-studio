@@ -64,6 +64,7 @@ export interface GradeEstimates {
   bgs: GradeResult
   cgc: GradeResult
   sgc: GradeResult
+  tag: GradeResult
 }
 
 export interface AnalysisResult {

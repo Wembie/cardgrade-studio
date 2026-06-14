@@ -76,17 +76,18 @@ export function analyzeEdges(card: ImageData): EdgeResult {
   const topValues    = collectEdgeBand(data, width, height, 'top',    bandWidth)
   const bottomValues = collectEdgeBand(data, width, height, 'bottom', bandWidth)
 
-  // Score = how free the edge is from dark outlier pixels (chips/dings).
-  // stdDev alone penalizes colored borders — use outlier rate instead.
+  // Score = how free the edge is from defect pixels.
+  // Bidirectional: dark chips on light borders + bright whitening on dark borders.
   function chipScore(values: number[]): number {
     if (values.length === 0) return 100
     const sorted = [...values].sort((a, b) => a - b)
-    // Use median as reference (robust against outliers)
     const median = sorted[Math.floor(sorted.length / 2)]
-    const chipThreshold = median - 45
-    const chips = values.filter(v => v < chipThreshold).length
+    // 25% below median catches darkening; +60 above median catches whitening (exposed core)
+    const lo = median * 0.75
+    const hi = Math.min(255, median + 60)
+    const chips = values.filter(v => v < lo || v > hi).length
     const chipRate = chips / values.length
-    return clamp(100 - chipRate * 600, 0, 100)
+    return clamp(100 - chipRate * 500, 0, 100)
   }
 
   const leftScore   = chipScore(leftValues)

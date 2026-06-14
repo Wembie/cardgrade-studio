@@ -90,12 +90,13 @@ export function analyzeCorners(card: ImageData): CornerResult {
     const sorted = [...cardPixels].sort((a, b) => a - b)
     const median = sorted[Math.floor(sorted.length / 2)]
 
-    // Worn corners show as dark outliers in the card-material pixels
-    // (bending/chipping pulls card stock → darker than normal border color)
-    const chipThreshold = median - 45
-    const chips = cardPixels.filter(v => v < chipThreshold).length
+    // Bidirectional: dark chips on light corners + bright whitening on dark corners.
+    // Relative thresholds handle colored card borders (Pokemon yellow/green/black).
+    const lo = median * 0.75
+    const hi = Math.min(255, median + 60)
+    const chips = cardPixels.filter(v => v < lo || v > hi).length
     const chipRate = chips / cardPixels.length
-    return clamp(100 - chipRate * 400, 0, 100)
+    return clamp(100 - chipRate * 300, 0, 100)
   }) as [number, number, number, number]
 
   const avgScore = scores.reduce((a, b) => a + b, 0) / 4
