@@ -77,12 +77,23 @@ export function analyzeEdges(card: ImageData): EdgeResult {
   const bottomValues = collectEdgeBand(data, width, height, 'bottom', bandWidth)
 
   // Score = how free the edge is from defect pixels.
-  // Bidirectional: dark chips on light borders + bright whitening on dark borders.
+  // First checks for uniform border (histogram peak). Full-art cards with no
+  // visible border have a flat histogram — artwork bleed, can't measure wear.
   function chipScore(values: number[]): number {
     if (values.length === 0) return 100
+
+    // Histogram peak detection: uniform borders (white, yellow, black) cluster
+    // in a narrow brightness range; artwork spreads across all buckets.
+    const BUCKET = 40
+    const buckets = new Array(Math.ceil(256 / BUCKET)).fill(0)
+    for (const v of values) buckets[Math.min(buckets.length - 1, Math.floor(v / BUCKET))]++
+    const maxBucket = Math.max(...buckets)
+    // No strong peak → artwork in edge band → can't measure → return NM-MT floor
+    if (maxBucket / values.length < 0.30) return 78
+
     const sorted = [...values].sort((a, b) => a - b)
     const median = sorted[Math.floor(sorted.length / 2)]
-    // 25% below median catches darkening; +60 above median catches whitening (exposed core)
+    // Bidirectional: dark chips on light borders + bright whitening on dark borders
     const lo = median * 0.75
     const hi = Math.min(255, median + 60)
     const chips = values.filter(v => v < lo || v > hi).length

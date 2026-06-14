@@ -87,11 +87,18 @@ export function analyzeCorners(card: ImageData): CornerResult {
     const cardPixels = values.filter(v => v > 30)
     if (cardPixels.length < 4) return 85  // mostly background = small corner, assume OK
 
+    // Histogram peak detection: artwork/full-bleed corners have no dominant brightness band.
+    // If no strong peak → can't measure corner wear from photo → return NM-MT floor.
+    const BUCKET = 40
+    const buckets = new Array(Math.ceil(256 / BUCKET)).fill(0)
+    for (const v of cardPixels) buckets[Math.min(buckets.length - 1, Math.floor(v / BUCKET))]++
+    const maxBucket = Math.max(...buckets)
+    if (maxBucket / cardPixels.length < 0.30) return 78
+
     const sorted = [...cardPixels].sort((a, b) => a - b)
     const median = sorted[Math.floor(sorted.length / 2)]
 
     // Bidirectional: dark chips on light corners + bright whitening on dark corners.
-    // Relative thresholds handle colored card borders (Pokemon yellow/green/black).
     const lo = median * 0.75
     const hi = Math.min(255, median + 60)
     const chips = cardPixels.filter(v => v < lo || v > hi).length
