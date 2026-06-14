@@ -98,7 +98,7 @@ export function analyzeEdges(card: ImageData): EdgeResult {
     const hi = Math.min(255, median + 60)
     const chips = values.filter(v => v < lo || v > hi).length
     const chipRate = chips / values.length
-    return clamp(100 - chipRate * 500, 0, 100)
+    return clamp(100 - chipRate * 500, 78, 100)
   }
 
   const leftScore   = chipScore(leftValues)

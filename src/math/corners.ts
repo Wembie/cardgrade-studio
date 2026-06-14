@@ -103,7 +103,7 @@ export function analyzeCorners(card: ImageData): CornerResult {
     const hi = Math.min(255, median + 60)
     const chips = cardPixels.filter(v => v < lo || v > hi).length
     const chipRate = chips / cardPixels.length
-    return clamp(100 - chipRate * 300, 0, 100)
+    return clamp(100 - chipRate * 300, 78, 100)
   }) as [number, number, number, number]
 
   const avgScore = scores.reduce((a, b) => a + b, 0) / 4
