@@ -130,6 +130,28 @@ function bilinearSample(
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /**
+ * Project a set of points from warped-rect space (0,0 to outW×outH) back into
+ * the original image coordinate space defined by `outer`. Inverse of projectIntoRect.
+ * Used to convert auto-detected border positions in the warped image back to
+ * original-image corner coordinates for visual display.
+ */
+export function projectFromRect(
+  outer: CardCorners,
+  points: CardCorners,
+  outW: number,
+  outH: number,
+): CardCorners {
+  const rect: CardCorners = [
+    { x: 0, y: 0 },
+    { x: outW - 1, y: 0 },
+    { x: outW - 1, y: outH - 1 },
+    { x: 0, y: outH - 1 },
+  ]
+  const h = computeHomography(rect, outer)
+  return points.map(pt => applyHomography(h, pt.x, pt.y)) as CardCorners
+}
+
+/**
  * Project a set of points from the same coordinate space as `outer` into a
  * normalized rectangle of size outW × outH, using the homography defined by
  * outer → rect. Used to map inner (artwork) corners into warped card space
