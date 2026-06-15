@@ -2,8 +2,9 @@
 
 import { useState, useCallback, useEffect } from 'react'
 import type { CardCorners, AnalysisState, AnalysisResult } from '@/shared/types'
-import { warpPerspective } from '@/math/perspective'
-import { analyzeCentering, analyzeCenteringFromCorners } from '@/math/centering'
+import { warpPerspective, projectFromRect } from '@/math/perspective'
+import { analyzeCentering, analyzeCenteringFromCorners, getBorderWidthsPx } from '@/math/centering'
+import { CARD_TYPES, DEFAULT_CARD_TYPE, type CardTypeDef } from '@/shared/constants/cardTypes'
 import { analyzeSurface } from '@/math/surface'
 import { analyzeEdges } from '@/math/edges'
 import { analyzeCorners } from '@/math/corners'
@@ -33,11 +34,13 @@ export interface UseAnalyzerReturn {
   outerCorners: CardCorners | null
   innerCorners: CardCorners | null
   borderPercent: number
+  cardType: CardTypeDef
   analysisState: AnalysisState
   setImage: (file: File) => void
   setOuterCorners: (corners: CardCorners) => void
   setInnerCorners: (corners: CardCorners) => void
   setBorderPercent: (pct: number) => void
+  setCardType: (type: CardTypeDef) => void
   analyze: () => Promise<void>
   reset: () => void
 }
@@ -47,17 +50,27 @@ export function useAnalyzer(): UseAnalyzerReturn {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null)
   const [outerCorners, setOuterCorners] = useState<CardCorners | null>(null)
-  const [innerCorners, setInnerCorners] = useState<CardCorners | null>(null)
+  const [innerCorners, setInnerCornersRaw] = useState<CardCorners | null>(null)
+  const [innerCornersManual, setInnerCornersManual] = useState(false)
   const [borderPercent, setBorderPercentRaw] = useState(8)
+  const [cardType, setCardType] = useState<CardTypeDef>(DEFAULT_CARD_TYPE)
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: 'idle' })
 
   useEffect(() => {
     return () => { if (imageUrl) URL.revokeObjectURL(imageUrl) }
   }, [imageUrl])
 
+  // User dragging inner corner handles → mark as manual so analysis trusts these corners
+  const setInnerCorners = useCallback((corners: CardCorners) => {
+    setInnerCornersRaw(corners)
+    setInnerCornersManual(true)
+  }, [])
+
+  // Slider changes reset to auto mode — pixel scan will determine real border on next analyze
   const setBorderPercent = useCallback((pct: number) => {
     setBorderPercentRaw(pct)
-    if (outerCorners) setInnerCorners(computeInnerCorners(outerCorners, pct))
+    setInnerCornersManual(false)
+    if (outerCorners) setInnerCornersRaw(computeInnerCorners(outerCorners, pct))
   }, [outerCorners])
 
   const setImage = useCallback((file: File) => {
@@ -74,8 +87,8 @@ export function useAnalyzer(): UseAnalyzerReturn {
       setImageUrl(url)
       setImageDimensions({ width: w, height: h })
       setAnalysisState({ status: 'idle' })
+      setInnerCornersManual(false)
 
-      // Outer corners at 5% inset — assumes photo has a small background margin
       const ox = w * 0.05, oy = h * 0.05
       const outer: CardCorners = [
         { x: ox,     y: oy },
@@ -84,7 +97,7 @@ export function useAnalyzer(): UseAnalyzerReturn {
         { x: ox,     y: h - oy },
       ]
       setOuterCorners(outer)
-      setInnerCorners(computeInnerCorners(outer, 8))
+      setInnerCornersRaw(computeInnerCorners(outer, 8))
     }
 
     img.onerror = () => {
@@ -128,15 +141,38 @@ export function useAnalyzer(): UseAnalyzerReturn {
 
       const warped = warpPerspective(srcImageData, outerCorners, OUT_W, OUT_H)
 
-      // If user placed inner corners, use them directly (accurate).
-      // Otherwise fall back to pixel-scan on the warped image.
-      const centering = innerCorners
-        ? analyzeCenteringFromCorners(outerCorners, innerCorners, OUT_W, OUT_H)
-        : analyzeCentering(warped)
+      // Manual inner corners (user-dragged) → use corner-based centering.
+      // Auto mode → pixel scan on the warped image gives real border positions.
+      let centering: ReturnType<typeof analyzeCentering>
+      let bw: { left: number; right: number; top: number; bottom: number }
 
-      const surface      = analyzeSurface(warped)
-      const edges        = analyzeEdges(warped)
-      const cornerResult = analyzeCorners(warped)
+      if (innerCornersManual && innerCorners) {
+        centering = analyzeCenteringFromCorners(outerCorners, innerCorners, OUT_W, OUT_H)
+        bw = getBorderWidthsPx(outerCorners, innerCorners, OUT_W, OUT_H)
+      } else {
+        centering = analyzeCentering(warped)
+        bw = {
+          left:   centering.leftBorder,
+          right:  centering.rightBorder,
+          top:    centering.topBorder,
+          bottom: centering.bottomBorder,
+        }
+        // Project detected border positions back to original image coords so the
+        // inner corner handles move to reflect what the pixel scan actually found.
+        const detectedInner: CardCorners = [
+          { x: bw.left,          y: bw.top },
+          { x: OUT_W - bw.right, y: bw.top },
+          { x: OUT_W - bw.right, y: OUT_H - bw.bottom },
+          { x: bw.left,          y: OUT_H - bw.bottom },
+        ]
+        setInnerCornersRaw(projectFromRect(outerCorners, detectedInner, OUT_W, OUT_H))
+      }
+
+      const avgBorderPx = (bw.left + bw.right + bw.top + bw.bottom) / 4
+
+      const surface      = analyzeSurface(warped, avgBorderPx)
+      const edges        = analyzeEdges(warped, bw)
+      const cornerResult = analyzeCorners(warped, avgBorderPx)
       const grades       = estimateGrades(centering, surface, edges, cornerResult)
 
       const [TL, TR, , BL] = outerCorners
@@ -154,13 +190,15 @@ export function useAnalyzer(): UseAnalyzerReturn {
       const result: AnalysisResult = {
         centering, surface, edges, corners: cornerResult,
         grades, warpedDataUrl, angleDeviation,
+        widthMm: cardType.widthMm,
+        heightMm: cardType.heightMm,
       }
 
       setAnalysisState({ status: 'done', result })
     } catch (err) {
       setAnalysisState({ status: 'error', message: err instanceof Error ? err.message : 'Analysis failed.' })
     }
-  }, [imageUrl, outerCorners, innerCorners, imageDimensions])
+  }, [imageUrl, outerCorners, innerCorners, innerCornersManual, imageDimensions, cardType])
 
   const reset = useCallback(() => {
     if (imageUrl) URL.revokeObjectURL(imageUrl)
@@ -168,7 +206,8 @@ export function useAnalyzer(): UseAnalyzerReturn {
     setImageUrl(null)
     setImageDimensions(null)
     setOuterCorners(null)
-    setInnerCorners(null)
+    setInnerCornersRaw(null)
+    setInnerCornersManual(false)
     setBorderPercentRaw(8)
     setAnalysisState({ status: 'idle' })
   }, [imageUrl])
@@ -176,12 +215,13 @@ export function useAnalyzer(): UseAnalyzerReturn {
   return {
     imageFile, imageUrl, imageDimensions,
     outerCorners, innerCorners,
-    borderPercent,
+    borderPercent, cardType,
     analysisState,
     setImage,
     setOuterCorners,
     setInnerCorners,
     setBorderPercent,
+    setCardType,
     analyze,
     reset,
   }

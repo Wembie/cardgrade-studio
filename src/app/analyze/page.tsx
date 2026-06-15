@@ -9,6 +9,7 @@ import { BorderAdjuster } from '@/features/analyzer/components/BorderAdjuster'
 import { LevelIndicator } from '@/features/analyzer/components/LevelIndicator'
 import { GradeResults } from '@/features/analyzer/components/GradeResults'
 import type { AnalysisState } from '@/shared/types'
+import { CARD_TYPES } from '@/shared/constants/cardTypes'
 
 const ANALYSIS_STEPS = [
   'Computing perspective warp...',
@@ -132,11 +133,13 @@ export default function AnalyzePage() {
     outerCorners,
     innerCorners,
     borderPercent,
+    cardType,
     analysisState,
     setImage,
     setOuterCorners,
     setInnerCorners,
     setBorderPercent,
+    setCardType,
     analyze,
     reset,
   } = useAnalyzer()
@@ -197,19 +200,33 @@ export default function AnalyzePage() {
                   onInnerChange={setInnerCorners}
                 />
 
-                {/* Border width slider */}
-                <div className="flex items-center gap-3 px-1">
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">Border</span>
-                  <input
-                    type="range"
-                    min={2}
-                    max={22}
-                    step={1}
-                    value={borderPercent}
-                    onChange={e => setBorderPercent(Number(e.target.value))}
-                    className="flex-1 h-1.5 accent-yellow-400 cursor-pointer"
-                  />
-                  <span className="text-xs text-yellow-400 font-mono w-8 text-right">{borderPercent}%</span>
+                {/* Card type + border controls */}
+                <div className="flex flex-col gap-2 px-1">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Card type</span>
+                    <select
+                      value={cardType.key}
+                      onChange={e => setCardType(CARD_TYPES.find(t => t.key === e.target.value) ?? CARD_TYPES[0])}
+                      className="flex-1 h-7 text-xs rounded-md bg-secondary border border-border text-foreground px-2 cursor-pointer focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                      {CARD_TYPES.map(t => (
+                        <option key={t.key} value={t.key}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">Border</span>
+                    <input
+                      type="range"
+                      min={2}
+                      max={22}
+                      step={1}
+                      value={borderPercent}
+                      onChange={e => setBorderPercent(Number(e.target.value))}
+                      className="flex-1 h-1.5 accent-yellow-400 cursor-pointer"
+                    />
+                    <span className="text-xs text-yellow-400 font-mono w-8 text-right">{borderPercent}%</span>
+                  </div>
                 </div>
 
                 <LevelIndicator corners={outerCorners} />

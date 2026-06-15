@@ -151,10 +151,36 @@ function gradePSA(sub: GradeSubScores): GradeResult {
 // Black Label: ALL four sub-grades exactly 10.0.
 // Pristine 10: all sub-grades ≥ 9.5 with avg ≥ 9.875 (e.g. 10/10/10/9.5).
 // Gem Mint 9.5: avg ≥ 9.25 and min ≥ 9.0.
-// Overall grade = min + 0.5 bump (unless two or more share the minimum, no bump).
+// Centering sub-grade uses stricter thresholds than the other dimensions:
+//   BGS centering 10 requires ~50/50 (score ≥ 99.5).
+//   BGS centering 9.5 = 55/45 (score ≥ 97). rawToSubGrade(98) → 10 is wrong here.
 
 function bgsSubGrade(score: number): number {
   return Math.round(rawToSubGrade(score) * 2) / 2
+}
+
+// Centering-specific sub-grade for BGS — tighter than bgsSubGrade.
+// Source: Beckett published centering tolerances (gradingmetric.com, beckett.com/grading/scale).
+const BGS_CENTERING_BREAKPOINTS: [score: number, subGrade: number][] = [
+  [99.5, 10],  // ~50/50 (Black Label / Pristine centering)
+  [97,   9.5], // ~55/45 (Gem Mint centering)
+  [87,   9],   // ~60/40
+  [81,   8.5], // ~65/35
+  [75,   8],   // ~70/30
+  [67,   7.5],
+  [60,   7],
+  [50,   6],
+  [40,   5],
+  [30,   4],
+  [20,   3],
+  [10,   2],
+]
+
+function bgsCenteringSubGrade(score: number): number {
+  for (const [threshold, grade] of BGS_CENTERING_BREAKPOINTS) {
+    if (score >= threshold) return grade
+  }
+  return 1.5
 }
 
 function bgsDetermineGrade(subGrades: [number, number, number, number]): { numeric: number; label: string } {
@@ -183,7 +209,7 @@ function bgsDetermineGrade(subGrades: [number, number, number, number]): { numer
 
 function gradeBGS(sub: GradeSubScores): GradeResult {
   const subGrades: [number, number, number, number] = [
-    bgsSubGrade(sub.centering),
+    bgsCenteringSubGrade(sub.centering),  // stricter: 50/50 required for centering 10
     bgsSubGrade(sub.surface),
     bgsSubGrade(sub.edges),
     bgsSubGrade(sub.corners),

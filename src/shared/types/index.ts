@@ -74,7 +74,9 @@ export interface AnalysisResult {
   corners: CornerResult
   grades: GradeEstimates
   warpedDataUrl: string
-  angleDeviation: number  // degrees tilt from level
+  angleDeviation: number
+  widthMm: number
+  heightMm: number
 }
 
 export type AnalysisState =
