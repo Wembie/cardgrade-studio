@@ -177,9 +177,11 @@ function CornerScores({ scores }: { scores: [number, number, number, number] }) 
 function CenteringBar({
   lrPercent,
   tbPercent,
+  bordersMm,
 }: {
   lrPercent: [number, number]
   tbPercent: [number, number]
+  bordersMm?: { left: number; right: number; top: number; bottom: number }
 }) {
   const [lp, rp] = lrPercent
   const [tp, bp] = tbPercent
@@ -189,8 +191,14 @@ function CenteringBar({
       {/* LR */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Left {lp.toFixed(1)}%</span>
-          <span>Right {rp.toFixed(1)}%</span>
+          <span>
+            Left {lp.toFixed(1)}%
+            {bordersMm && <span className="ml-1 opacity-50">{bordersMm.left.toFixed(2)}mm</span>}
+          </span>
+          <span>
+            {bordersMm && <span className="mr-1 opacity-50">{bordersMm.right.toFixed(2)}mm</span>}
+            Right {rp.toFixed(1)}%
+          </span>
         </div>
         <div className="h-3 rounded-full bg-secondary overflow-hidden flex">
           <div
@@ -206,8 +214,14 @@ function CenteringBar({
       {/* TB */}
       <div className="space-y-1">
         <div className="flex justify-between text-xs text-muted-foreground">
-          <span>Top {tp.toFixed(1)}%</span>
-          <span>Bottom {bp.toFixed(1)}%</span>
+          <span>
+            Top {tp.toFixed(1)}%
+            {bordersMm && <span className="ml-1 opacity-50">{bordersMm.top.toFixed(2)}mm</span>}
+          </span>
+          <span>
+            {bordersMm && <span className="mr-1 opacity-50">{bordersMm.bottom.toFixed(2)}mm</span>}
+            Bottom {bp.toFixed(1)}%
+          </span>
         </div>
         <div className="h-3 rounded-full bg-secondary overflow-hidden flex">
           <div
@@ -228,10 +242,24 @@ function CenteringBar({
 
 export function GradeResults({ result }: GradeResultsProps) {
   const [detailsOpen, setDetailsOpen] = useState(false)
-  const { centering, surface, edges, corners: cornerResult, grades, warpedDataUrl } = result
+  const { centering, surface, edges, corners: cornerResult, grades, warpedDataUrl, widthMm, heightMm } = result
 
-  // Derive sub-scores from the first grade result (they're shared)
   const sub = grades.psa.subScores
+
+  const pxW = widthMm / 500
+  const pxH = heightMm / 700
+  const bordersMm = {
+    left:   centering.leftBorder   * pxW,
+    right:  centering.rightBorder  * pxW,
+    top:    centering.topBorder    * pxH,
+    bottom: centering.bottomBorder * pxH,
+  }
+
+  // "LR 52/48" ratio string for display
+  const [lp, rp] = centering.lrPercent
+  const [tp, bp] = centering.tbPercent
+  const lrStr = `${lp}/${rp}`
+  const tbStr = `${tp}/${bp}`
 
   return (
     <div className="space-y-5">
@@ -315,11 +343,15 @@ export function GradeResults({ result }: GradeResultsProps) {
             {/* Centering */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-2">
-                Centering
+                Centering &nbsp;
+                <span className="normal-case font-normal text-muted-foreground/70 tabular">
+                  LR {lrStr} &middot; TB {tbStr}
+                </span>
               </p>
               <CenteringBar
                 lrPercent={centering.lrPercent}
                 tbPercent={centering.tbPercent}
+                bordersMm={bordersMm}
               />
               <p className="text-xs text-muted-foreground mt-2 tabular">
                 LR ratio: {centering.lrRatio.toFixed(2)} &nbsp;|&nbsp; TB ratio: {centering.tbRatio.toFixed(2)}

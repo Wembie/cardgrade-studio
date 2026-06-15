@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react'
 import type { CardCorners, AnalysisState, AnalysisResult } from '@/shared/types'
 import { warpPerspective } from '@/math/perspective'
 import { analyzeCentering, analyzeCenteringFromCorners, getBorderWidthsPx } from '@/math/centering'
+import { CARD_TYPES, DEFAULT_CARD_TYPE, type CardTypeDef } from '@/shared/constants/cardTypes'
 import { analyzeSurface } from '@/math/surface'
 import { analyzeEdges } from '@/math/edges'
 import { analyzeCorners } from '@/math/corners'
@@ -33,11 +34,13 @@ export interface UseAnalyzerReturn {
   outerCorners: CardCorners | null
   innerCorners: CardCorners | null
   borderPercent: number
+  cardType: CardTypeDef
   analysisState: AnalysisState
   setImage: (file: File) => void
   setOuterCorners: (corners: CardCorners) => void
   setInnerCorners: (corners: CardCorners) => void
   setBorderPercent: (pct: number) => void
+  setCardType: (type: CardTypeDef) => void
   analyze: () => Promise<void>
   reset: () => void
 }
@@ -49,6 +52,7 @@ export function useAnalyzer(): UseAnalyzerReturn {
   const [outerCorners, setOuterCorners] = useState<CardCorners | null>(null)
   const [innerCorners, setInnerCorners] = useState<CardCorners | null>(null)
   const [borderPercent, setBorderPercentRaw] = useState(8)
+  const [cardType, setCardType] = useState<CardTypeDef>(DEFAULT_CARD_TYPE)
   const [analysisState, setAnalysisState] = useState<AnalysisState>({ status: 'idle' })
 
   useEffect(() => {
@@ -161,13 +165,15 @@ export function useAnalyzer(): UseAnalyzerReturn {
       const result: AnalysisResult = {
         centering, surface, edges, corners: cornerResult,
         grades, warpedDataUrl, angleDeviation,
+        widthMm: cardType.widthMm,
+        heightMm: cardType.heightMm,
       }
 
       setAnalysisState({ status: 'done', result })
     } catch (err) {
       setAnalysisState({ status: 'error', message: err instanceof Error ? err.message : 'Analysis failed.' })
     }
-  }, [imageUrl, outerCorners, innerCorners, imageDimensions])
+  }, [imageUrl, outerCorners, innerCorners, imageDimensions, cardType])
 
   const reset = useCallback(() => {
     if (imageUrl) URL.revokeObjectURL(imageUrl)
@@ -183,12 +189,13 @@ export function useAnalyzer(): UseAnalyzerReturn {
   return {
     imageFile, imageUrl, imageDimensions,
     outerCorners, innerCorners,
-    borderPercent,
+    borderPercent, cardType,
     analysisState,
     setImage,
     setOuterCorners,
     setInnerCorners,
     setBorderPercent,
+    setCardType,
     analyze,
     reset,
   }
