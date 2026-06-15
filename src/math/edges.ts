@@ -72,28 +72,33 @@ export function analyzeEdges(
   const bottomValues = collectEdgeBand(data, width, height, 'bottom', bottomBand)
 
   // Score = how free the edge is from defect pixels.
-  // First checks for uniform border (histogram peak). Full-art cards with no
-  // visible border have a flat histogram — artwork bleed, can't measure wear.
+  // Uniform card borders (white, yellow, black) cluster tightly in one brightness bucket.
+  // Artwork spreads across buckets. Chips appear as:
+  //   dark outliers on light borders (exposed substrate < median-45)
+  //   bright outliers on dark borders (exposed white stock > median+60)
+  // Using absolute lo=median-45 (not median*0.75) so dark borders (median≈10) don't
+  // falsely trigger lower-bound chip detection on clean pixels at grayscale 0-7.
   function chipScore(values: number[]): number {
     if (values.length === 0) return 100
 
-    // Histogram peak detection: uniform borders (white, yellow, black) cluster
-    // in a narrow brightness range; artwork spreads across all buckets.
     const BUCKET = 40
     const buckets = new Array(Math.ceil(256 / BUCKET)).fill(0)
     for (const v of values) buckets[Math.min(buckets.length - 1, Math.floor(v / BUCKET))]++
     const maxBucket = Math.max(...buckets)
-    // No strong peak → artwork in edge band → can't measure → return NM-MT floor
-    if (maxBucket / values.length < 0.30) return 78
+    // Threshold 0.60: real uniform borders cluster 60-95% in one bucket.
+    // Dark artwork can concentrate 50-55% in the dark bucket — this filters it out.
+    if (maxBucket / values.length < 0.60) return 85
 
     const sorted = [...values].sort((a, b) => a - b)
     const median = sorted[Math.floor(sorted.length / 2)]
-    // Bidirectional: dark chips on light borders + bright whitening on dark borders
-    const lo = median * 0.75
+    const lo = Math.max(0, median - 45)
     const hi = Math.min(255, median + 60)
     const chips = values.filter(v => v < lo || v > hi).length
     const chipRate = chips / values.length
-    return clamp(100 - chipRate * 500, 78, 100)
+    // chipRate > 0.15 on a "uniform" band = dark artwork slipped through histogram check.
+    // Real physical chips on a 500px-wide card edge rarely exceed 10-12% chip rate.
+    if (chipRate > 0.15) return 85
+    return clamp(100 - chipRate * 500, 0, 100)
   }
 
   const leftScore   = chipScore(leftValues)
